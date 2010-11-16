@@ -1,0 +1,7 @@
+room_123:
+  devices:
+    nec_proj:
+      names: [projector1, projector]
+      ip: "127.0.0.1"
+      port: 8081
+

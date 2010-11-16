@@ -1,0 +1,10 @@
+room_123:
+  nec:
+    ip: 1.1.1.2
+    port: 234
+
+room_P345:
+  other:
+    ip:12.1.1.1
+    port: 345
+
