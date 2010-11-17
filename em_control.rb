@@ -12,12 +12,18 @@ require 'active_support/core_ext/string'
 #
 # Library Files
 #
+require './events.rb'
 require './devices.rb'
 require './device.rb'
-require './controller.rb'
+require './controllers.rb'
+require './logic.rb'
+require './system.rb'
 
 module Control
 	class Device
+		include EventPublisher
+		event :update_status
+
 		class Base < EventMachine::Connection
 
 			def initialize *args
@@ -41,7 +47,7 @@ module Control
 				@connect_retry = 0		# delay if a retry happens straight again
 
 				#
-				# Configure links between objects
+				# Configure links between objects (This is a very loose tie)
 				#
 				@parent = Devices.last
 				@parent.setbase(self)
@@ -224,21 +230,21 @@ module Control
 			require 'yaml'
 			settings = YAML::load_file 'settings.yml'
 			settings.each do |name, room|
-				controller = Controller.new(name, Devices.new)
+				system = System.new(name.to_sym)
 				room.each do |settings, mod_name|
 					case settings.to_sym
 						when :devices
 							mod_name.each do |key, value|
 								require "./devices/#{key}.rb"
 								device = key.classify.constantize.new
-								controller.devices << device
+								system.devices << device
 								ip = nil
 								port = nil
 								p value
 								value.each do |field, data|
 									case field.to_sym
 										when :names
-											data.each {|item| controller.devices[item.to_sym] = device}
+											data.each {|item| system.devices[item.to_sym] = device}
 										when :ip
 											ip = data
 										when :port
