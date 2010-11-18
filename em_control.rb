@@ -1,10 +1,16 @@
 #
+# STD LIB
+#
+require "observer"
+require 'yaml'
+
+
+#
 # Gems
 #
 require 'rubygems'
 require 'eventmachine'
 require 'algorithms'
-require 'yaml'
 require 'active_support'
 require 'active_support/core_ext/string'
 
@@ -12,18 +18,16 @@ require 'active_support/core_ext/string'
 #
 # Library Files
 #
-require './events.rb'
+require './constants.rb'
 require './devices.rb'
-require './device.rb'
 require './controllers.rb'
+require './status.rb'
+require './device.rb'
 require './logic.rb'
 require './system.rb'
 
 module Control
 	class Device
-		include EventPublisher
-		event :update_status
-
 		class Base < EventMachine::Connection
 
 			def initialize *args
@@ -35,10 +39,10 @@ module Control
 					:retries => 2
 				}
 
-				@recieve_queue = Queue.new
+				@receive_queue = Queue.new
 
-				@recieve_lock = Mutex.new
-				@send_lock = Mutex.new  # For in sync send and recieves when required
+				@receive_lock = Mutex.new
+				@send_lock = Mutex.new  # For in sync send and receives when required
 		
 				@send_queue = Containers::PriorityQueue.new
 				@last_command = {}
@@ -81,7 +85,7 @@ module Control
 
   
 			def receive_data(data)
-				@recieve_queue.push(data)
+				@receive_queue.push(data)
 
 				operation = proc { self.process_data }
 				EM.defer(operation)
@@ -153,14 +157,14 @@ module Control
 			# Controls the flow of data for retry puropses
 			#
 			def process_data
-				@recieve_lock.synchronize {			# Lock ensures that serialisation of events per-device module
+				@receive_lock.synchronize {			# Lock ensures that serialisation of events per-device module
 				
 					succeeded = nil
-					if @parent.respond_to?(:recieved)
+					if @parent.respond_to?(:received)
 		
-						succeeded = @parent.recieved(@recieve_queue.pop(true))	# non-blocking call (will crash if there is no data)
+						succeeded = @parent.received(@receive_queue.pop(true))	# non-blocking call (will crash if there is no data)
 
-						@send_lock.synchronize {		# recieved call can call send so must sync here
+						@send_lock.synchronize {		# received call can call send so must sync here
 							if succeeded == false
 								if @send_queue.has_priority?(@last_command[:priority] + 1) == false && @last_command[:retries] > 0	# no user defined replacements
 									@last_command[:retries] -= 1
@@ -178,10 +182,10 @@ module Control
 						}
 					
 					#
-					# If no recieve function is defined process the next command
+					# If no receive function is defined process the next command
 					#
 					else
-						@recieve_queue.pop(true)	# this is thread safe
+						@receive_queue.pop(true)	# this is thread safe
 						@send_lock.synchronize {
 							next_command
 						}

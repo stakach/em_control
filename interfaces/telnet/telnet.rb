@@ -86,6 +86,6 @@ class TelnetServer < EventMachine::Connection
 end
 
 EventMachine::run {
-	EventMachine::start_server "127.0.0.1", 8081, TelnetServer
-	puts 'running echo server on 8081'
+	EventMachine::start_server "127.0.0.1", 8080, TelnetServer
+	puts 'running echo server on 8080'
 }

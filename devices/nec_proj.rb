@@ -15,6 +15,8 @@ class NecProj < Control::Device
 			return
 		end
 		
+		var_const_test = On
+		
 		command1
 		command2
 		command1
@@ -29,7 +31,7 @@ class NecProj < Control::Device
 	end
 
 
-	def recieved(data)
+	def received(data)
 		p data
 		
 		if data =~ /fail/i
