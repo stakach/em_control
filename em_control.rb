@@ -19,6 +19,7 @@ require 'active_support/core_ext/string'
 # Library Files
 #
 require './constants.rb'
+require './utilities.rb'
 require './devices.rb'
 require './controllers.rb'
 require './status.rb'
@@ -29,14 +30,16 @@ require './system.rb'
 module Control
 	class Device
 		class Base < EventMachine::Connection
-
+			include Utilities
+			
 			def initialize *args
 				super
 		
 				@default_send_options = {	
 					:priority => 0,
 					:wait => true,
-					:retries => 2
+					:retries => 2,
+					:hex_string => false
 				}
 
 				@receive_queue = Queue.new
@@ -126,8 +129,15 @@ module Control
 					if !@is_connected
 						return		# do not send when not connected
 					end
-
+					
 					options = @default_send_options.merge(options)
+					
+					if data.class == Array
+						data = array_to_str(data)
+					elsif options[:hex_string] == true
+						data = hex_to_byte(data)
+					end
+
 					options[:data] = data
 					options[:retries] = 0 if options[:wait] == false
 					@send_queue.push(options, options[:priority])
@@ -162,7 +172,7 @@ module Control
 					succeeded = nil
 					if @parent.respond_to?(:received)
 		
-						succeeded = @parent.received(@receive_queue.pop(true))	# non-blocking call (will crash if there is no data)
+						succeeded = @parent.received(str_to_array(@receive_queue.pop(true)))	# non-blocking call (will crash if there is no data)
 
 						@send_lock.synchronize {		# received call can call send so must sync here
 							if succeeded == false

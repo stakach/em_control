@@ -32,6 +32,8 @@ class NecProj < Control::Device
 
 
 	def received(data)
+		data = Control::Utilities.array_to_str(data)
+		
 		p data
 		
 		if data =~ /fail/i
