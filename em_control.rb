@@ -1,8 +1,9 @@
 #
 # STD LIB
 #
-require "observer"
+require 'observer'
 require 'yaml'
+require 'thread'
 
 
 #
@@ -65,59 +66,7 @@ module Control
 			def default_send_options= (options)
 				@default_send_options.merge!(options)
 			end
-
-
-			#
-			# EM Callbacks: --------------------------------------------------------
-			#
-			def post_init
-				
-			end
-
-	
-			def connection_completed
-				# set status
-				
-				resume if paused?
-				@last_command[:wait] = false if !@last_command[:wait].nil?	# re-start event process
-				@connect_retry = 0
-				@is_connected = true
-				operation = proc { @parent.connected }
-				EM.defer(operation) if @parent.respond_to?(:connected)
-			end
-
-  
-			def receive_data(data)
-				@receive_queue.push(data)
-
-				operation = proc { self.process_data }
-				EM.defer(operation)
-			end
-
-
-			def unbind
-				# set offline
-				@is_connected = false				
-
-				operation = proc { @parent.disconnected }
-				EM.defer(operation) if @parent.respond_to?(:disconnected)
-				
-				# attempt re-connect
-				#	if !make and break
-				settings = Devices.connections[@parent]
-				
-				if @connect_retry == 0
-					reconnect settings[0], settings[1]
-					@connect_retry = 1
-				else
-					EM.add_timer 5, proc { 
-						reconnect settings[0], settings[1]
-					}
-				end
-			end
-			#
-			# ----------------------------------------------------------------------
-			#
+			
 
 
 			#
@@ -149,6 +98,11 @@ module Control
 						process_send
 					end
 				}
+			rescue
+				#
+				# save from bad user code (ie bad data)
+				#	TODO:: add logger
+				#
 			end
 	
 	
@@ -158,7 +112,83 @@ module Control
 			def last_command
 				return @last_command[:data]
 			end
+			
 
+			#
+			# EM Callbacks: --------------------------------------------------------
+			#
+			def post_init
+				
+			end
+
+	
+			def connection_completed
+				# set status
+				
+				resume if paused?
+				@last_command[:wait] = false if !@last_command[:wait].nil?	# re-start event process
+				@connect_retry = 0
+				@is_connected = true
+				operation = proc {
+					begin
+						@parent.connected
+					rescue
+						#
+						# save from bad user code (don't want to deplete thread pool)
+						#	TODO:: add logger
+						#
+					end
+				}
+				EM.defer(operation) if @parent.respond_to?(:connected)
+			end
+
+  
+			def receive_data(data)
+				@receive_queue.push(data)
+
+				operation = proc { self.process_data }
+				EM.defer(operation)
+			end
+
+
+			def unbind
+				# set offline
+				@is_connected = false				
+
+				operation = proc {
+					begin
+						@parent.disconnected
+					rescue
+						#
+						# save from bad user code (don't want to deplete thread pool)
+						#	TODO:: add logger
+						#
+					end
+				}
+				EM.defer(operation) if @parent.respond_to?(:disconnected)
+				
+				# attempt re-connect
+				#	if !make and break
+				settings = Devices.connections[@parent]
+				
+				if @connect_retry == 0
+					reconnect settings[0], settings[1]
+					@connect_retry = 1
+				else
+					@connect_retry += 1
+					#
+					# TODO - log this at least once
+					#	if @connect_retry == 2
+					#
+					EM.add_timer 5, proc { 
+						reconnect settings[0], settings[1]
+					}
+				end
+			end
+			#
+			# ----------------------------------------------------------------------
+			#
+			
 
 			protected
 
@@ -201,6 +231,17 @@ module Control
 						}
 					end
 				}
+				
+			rescue
+				#
+				# save from bad user code (don't want to deplete thread pool)
+				#	This error should be logged in some consistent manner
+				#	TODO:: Create logger
+				#
+				@receive_queue.pop(true)
+				@send_lock.synchronize {
+					next_command
+				}
 			end
 
 
@@ -228,8 +269,14 @@ module Control
 				@last_command = data
 
 				EM.schedule proc {
-					if !error?
-						send_data(data[:data])
+					begin
+						if !error?
+							send_data(data[:data])
+						end
+					rescue
+						#
+						# Save the thread in case of bad data in that send
+						#
 					end
 				}
 			end
@@ -258,7 +305,13 @@ module Control
 								value.each do |field, data|
 									case field.to_sym
 										when :names
-											data.each {|item| system.devices[item.to_sym] = device}
+											symdata = []
+											data.each {|item|
+												item = item.to_sym
+												system.devices[item] = device
+												symdata << item
+											}
+											system.devices[device] = symdata
 										when :ip
 											ip = data
 										when :port

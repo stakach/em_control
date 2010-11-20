@@ -5,6 +5,12 @@ module Control
 		
 		@status = {}
 		@status_lock = Mutex.new
+		
+		#
+		# Lock only used in device.rb
+		#
+		@wait_condition = ConditionVariable.new
+		@wait_status = nil
 
 		def [] (status)
 			@status_lock.synchronize {
@@ -16,6 +22,9 @@ module Control
 			@status_lock.synchronize {
 				@status[status] = data
 				notify_observers(self, status, data)
+				if status == @wait_status
+					@wait_condition.signal		# wake up the thread
+				end
 			}
 		end
 		
