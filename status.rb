@@ -20,9 +20,10 @@ module Control
 		
 		def []= (status, data)
 			@status_lock.synchronize {
+				old_data = @status[status]
 				@status[status] = data
-				notify_observers(self, status, data)
-				if status == @wait_status
+				notify_observers(self, status, data) unless data == old_data	# only notify changes
+				if status == @wait_status		# This is another reason to only have a single thread running commands at a time (also prevents interleaving)
 					@wait_condition.signal		# wake up the thread
 				end
 			}

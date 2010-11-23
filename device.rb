@@ -47,8 +47,8 @@ module Control
 					@wait_condition.wait(@status_lock)	# wait until the signal has been recieved
 					
 					@wait_status = nil					# this will run after the status has been recieved
-				}
-				return self[options[:wait_emit]]		# return the status value
+					return @status[options[:wait_emit]] # return the status value
+				}	
 			else
 				@base.send(data, options)
 			end
