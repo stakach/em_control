@@ -10,15 +10,13 @@ module Control
 
 		def initialize(name)
 			@name = name
-			@devices = Devices.new
-			@controllers = Controllers.new
+			@modules = Modules.new
 
 			@@systems[name] = self
 		end
 
-		attr_accessor :devices
+		attr_accessor :modules
 		attr_accessor :interfaces
-		attr_accessor :controllers
 		attr_reader :name
 	
 	end

@@ -21,8 +21,7 @@ require 'active_support/core_ext/string'
 #
 require './constants.rb'
 require './utilities.rb'
-require './devices.rb'
-require './controllers.rb'
+require './modules.rb'
 require './status.rb'
 require './device.rb'
 require './logic.rb'
@@ -57,7 +56,7 @@ module Control
 				#
 				# Configure links between objects (This is a very loose tie)
 				#
-				@parent = Devices.last
+				@parent = Modules.last
 				@parent.setbase(self)
 			end
 	
@@ -169,7 +168,7 @@ module Control
 				
 				# attempt re-connect
 				#	if !make and break
-				settings = Devices.connections[@parent]
+				settings = Modules.connections[@parent]
 				
 				if @connect_retry == 0
 					reconnect settings[0], settings[1]
@@ -298,7 +297,7 @@ module Control
 							mod_name.each do |key, value|
 								require "./devices/#{key}.rb"
 								device = key.classify.constantize.new
-								system.devices << device
+								system.modules << device
 								ip = nil
 								port = nil
 								p value
@@ -308,17 +307,17 @@ module Control
 											symdata = []
 											data.each {|item|
 												item = item.to_sym
-												system.devices[item] = device
+												system.modules[item] = device
 												symdata << item
 											}
-											system.devices[device] = symdata
+											system.modules[device] = symdata
 										when :ip
 											ip = data
 										when :port
 											port = data.to_i
 									end
 								end
-								Devices.connections[device] = [ip, port]
+								Modules.connections[device] = [ip, port]
 								EM.connect ip, port, Device::Base
 							end
 						when :controllers
