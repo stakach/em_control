@@ -25,6 +25,7 @@ require './modules.rb'
 require './status.rb'
 require './device.rb'
 require './logic.rb'
+require './interfaces/communicator.rb'
 require './system.rb'
 
 module Control

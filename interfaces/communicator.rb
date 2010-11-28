@@ -6,35 +6,43 @@
 #	Interfaces will have to have a base class that abstracts the event machine code so that
 #	nothing runs on the reactor thread.
 #
+module Control
 class Communicator
+
+	def initialize(system)
+		@system = system
+	end
+
 	
 	#
 	# Systems avaliable to this communicator
 	#
-	def system_list
+	def self.system_list
 		System.systems.keys
 	end
 	
 	#
 	# Set the system to communicate with
+	#	Up to interfaces to maintain stability here (They should deal with errors)
 	#
-	def select(system)
+	def self.select(system)
 		if system.class == Fixnum
-			@selected = System.systems[System.systems.keys[system]]
+			return @selected = System.systems[System.systems.keys[system]].communicator
 		else
 			system = system.to_sym if system.class == String
-			@selected = System.systems[system]
+			return @selected = System.systems[system].communicator
 		end
 	end
 	
 	#
 	# Pass commands to the selected system
 	#
-	def send(command, *args)
+	def send(mod, command, *args)
 		#
 		# Accept String, String (argument)
 		#	String
 		#
-		
+		@selected.modules[mod].__send__(command, *args)
 	end
+end
 end
