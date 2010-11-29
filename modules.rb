@@ -36,13 +36,14 @@ module Control
 				@module_list[mod_id] = mod
 			else
 				@module_map[mod_id] = mod
-				@name_map[mod] = [] if @name_map[mod] == nil
+				@name_map[mod] ||= [] 		#if @name_map[mod] == nil
 				@name_map[mod] << mod_id
 			end
 		end
 		
 		#
 		# Get names mapped to a mod
+		#  DEPRECATE:: Not used as far as I can tell 
 		#
 		def names(mod)
 			@name_map[mod]
