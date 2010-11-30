@@ -44,11 +44,6 @@ class Communicator
 	#
 	# Keep track of connected systems
 	#
-	def attach(interface)
-		@connected_interfaces << interface
-		return self
-	end
-
 	def disconnected(interface)
 		@connected_interfaces.delete(interface)
 	end
@@ -110,6 +105,11 @@ class Communicator
 
 	protected
 
+
+	def attach(interface)
+		@connected_interfaces << interface unless @connected_interfaces.include?(interface)
+		return self
+	end
 
 	def unregister_all(interface)
 		# TODO

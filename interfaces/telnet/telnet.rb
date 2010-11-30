@@ -4,12 +4,20 @@ require 'eventmachine'
 
 require './ansi.rb'
 
+module Control
 class TelnetServer < EventMachine::Connection
 
 	@@clients = {}
+	
+	def self.start
+		EventMachine::start_server "127.0.0.1", 8080, TelnetServer
+		puts 'running telnet server on 8080'
+	end
 
 	def initialize(*args)
 		super
+		
+		@selected = nil
 	end
 		
 	def post_init
@@ -28,14 +36,27 @@ class TelnetServer < EventMachine::Connection
 				send_data " "
 			end
 		elsif data =~ /.*\r\n$/
-			if @input == ""
-				@input = data.chop!.chop!
-			end
+			@input = data.chop!.chop!
 			if @input == "quit"
 				disconnect
 				return
 			end
-			send_line "  Command processed...", :green
+			begin
+				if @selected.nil?
+					num = @input.to_i
+					if num == 0
+						@selected = Communicator.select(self, @input)
+					else
+						@selected = Communicator.select(self, num)
+					end
+				else
+					thecommand = @input.split(/\s*/, 3)
+					@selected.send(thecommand[0], thecommand[1], thecommand[2].split(/\s*/))
+				end
+				send_line "  Command sent...", :green
+			rescue
+				send_line "  Invalid command...", :green
+			end
 			send_prompt("> ", :green)
 			@input = ""
 		else
@@ -45,6 +66,7 @@ class TelnetServer < EventMachine::Connection
 
 	def unbind
 		@@clients.delete(@identifier)
+		@selected.disconnected(self)
 	end
 	
 	protected
@@ -53,6 +75,8 @@ class TelnetServer < EventMachine::Connection
 		@input = ""
 		send_line("Please select from the following systems:", :green)
 		send_line("-----------------------------------------", :green)
+		system = Communicator.system_list
+		system.each_index { |x| send_line(" #{x}) #{system[x]}", :green) }
 		send_prompt("> ", :green)
 	end
 	
@@ -84,8 +108,9 @@ class TelnetServer < EventMachine::Connection
 		end
 	end
 end
+end
 
-EventMachine::run {
-	EventMachine::start_server "127.0.0.1", 8080, TelnetServer
-	puts 'running echo server on 8080'
-}
+#EventMachine::run {
+#	EventMachine::start_server "127.0.0.1", 8080, TelnetServer
+#	puts 'running echo server on 8080'
+#}
