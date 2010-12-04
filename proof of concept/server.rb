@@ -23,6 +23,7 @@ require 'eventmachine'
      
     def receive_data(data)
       p data
+	  STDOUT.flush
 	if data == "critical ping"
       		send_data 'fail'
 	elsif (data == "criticalish ping") && @@failonce

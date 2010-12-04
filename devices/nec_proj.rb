@@ -18,12 +18,20 @@ class NecProj < Control::Device
 		var_const_test = On
 		
 		command1
-		command2
+		command3		
+		command1
+		command3
 		command1
 		command3
 		command1
 		
-		EM.add_timer 5, proc { EM.stop_event_loop }
+		command2
+		command2
+
+		command1
+		command1
+		
+		#EM.add_timer 5, proc { EM.stop_event_loop }
 	end
 
 	def disconnected

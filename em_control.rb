@@ -26,10 +26,23 @@ require './status.rb'
 require './device.rb'
 require './logic.rb'
 require './interfaces/communicator.rb'
+require './interfaces/deferred.rb'
 require './system.rb'
 
 module Control
 	class Device
+	
+
+		#
+		# TODO::
+		#		rewrite send function removing the send queue
+		#			-- using the recieves queues sleep on pop function if there is no data
+		#			-- This will require a timeout implemented
+		#		Rewrite the recieve function
+		#			-- If the send lock is not active process the recieved data
+		#			-- else add to the recieve queue for the send function to process
+		#		Modify device class to just return the status (no more syncing or timeouts needed)
+		#
 		class Base < EventMachine::Connection
 			include Utilities
 			
@@ -76,11 +89,14 @@ module Control
 				@send_lock.synchronize {		# Ensure queue order and queue sizes
 				
 					if !@is_connected
-						return		# do not send when not connected
+						return					# do not send when not connected
 					end
 					
 					options = @default_send_options.merge(options)
 					
+					#
+					# Make sure we are sending appropriately formatted data
+					#
 					if data.class == Array
 						data = array_to_str(data)
 					elsif options[:hex_string] == true
@@ -89,14 +105,14 @@ module Control
 
 					options[:data] = data
 					options[:retries] = 0 if options[:wait] == false
-					@send_queue.push(options, options[:priority])
+					#@send_queue.push(options, options[:priority]) # Lets not do this
 			
 					waitingResponse = @last_command[:wait] == true	# must do this incase :wait == nil
 			
-					if !waitingResponse
+					#if !waitingResponse
 						@last_command = options
 						process_send
-					end
+					#end
 				}
 			rescue
 				#
@@ -301,7 +317,7 @@ module Control
 								system.modules << device
 								ip = nil
 								port = nil
-								p value
+								p value		# the print command
 								value.each do |field, data|
 									case field.to_sym
 										when :names
@@ -332,6 +348,8 @@ module Control
 			#devices[:projector1] = Devices.last
 			#Devices.connections[Devices.last] = ["127.0.0.1", 8081]
 			#EM.connect "127.0.0.1", 8081, Device::Base
+			require './interfaces/telnet/telnet.rb'
+			TelnetServer.start
 		end
 	end
 end

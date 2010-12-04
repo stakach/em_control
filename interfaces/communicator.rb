@@ -31,10 +31,10 @@ class Communicator
 	#
 	def self.select(interface, system)
 		if system.class == Fixnum
-			return @selected = System.systems[System.systems.keys[system]].communicator.attach(interface)
+			return System.systems[System.systems.keys[system]].communicator.attach(interface)
 		else
 			system = system.to_sym if system.class == String
-			return @selected = System.systems[system].communicator.attach(interface)
+			return System.systems[system].communicator.attach(interface)
 		end
 	end
 
@@ -53,10 +53,10 @@ class Communicator
 	# Keep track of status events
 	#
 	def register(interface, mod, status)
-		mod_sym = mod.to_sym if mod.class == String
+		mod_sym = mod.to_sym if mod.class == String	# remember the symbol used by the interface to reference this module
 		status = status.to_sym if status.class == String
 		
-		mod = @selected.modules[mod_sym]
+		mod = @system.modules[mod_sym]
 
 		@status_register[mod] ||= {}
 		@status_register[mod][status] ||= []
@@ -69,7 +69,7 @@ class Communicator
 		mod_sym = mod.to_sym if mod.class == String
 		status = status.to_sym if status.class == String
 		
-		mod = @selected.modules[mod_sym]
+		mod = @system.modules[mod_sym]
 		@status_register[mod][status] ||= []
 		@status_register[mod][status].delete(interface)
 
@@ -82,34 +82,42 @@ class Communicator
 		return if @status_register[mod][status].nil?
 		
 		#
-		# TODO:: Interfaces should implement the send function
+		# Interfaces should implement the notify function
 		#
-		@status_register[mod][status].each {|interface| interface[0].send(interface[1], data) }
+		@status_register[mod][status].each {|interface| interface[0].notify(interface[1], status, data) }
 	end
 	
 	#
 	# Pass commands to the selected system
 	#
-	def send(mod, command, *args)
+	def send(mod, command, *args, &block)
 		#
 		# Accept String, String (argument)
 		#	String
 		#
 		mod = mod.to_sym if mod.class == String
 
-		@command_lock.synchronize {
-			@selected.modules[mod].__send__(command, *args)	# Not send string however call function command
-		}
+		begin
+			@command_lock.synchronize {
+				@system.modules[mod].__send__(command, *args)	# Not send string however call function command
+			}
+		rescue
+			begin
+				block.call() if !block.nil?	# Block will inform of any errors
+			rescue
+			end
+		end
 	end
-
-
-	protected
-
+	
 
 	def attach(interface)
 		@connected_interfaces << interface unless @connected_interfaces.include?(interface)
 		return self
 	end
+
+
+	protected
+
 
 	def unregister_all(interface)
 		# TODO
