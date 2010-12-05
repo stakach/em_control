@@ -47,8 +47,8 @@ class NecProj < Control::Device
 		if data =~ /fail/i
 			p "-> #{last_command}"
 			if last_command =~ /criticalish/i
-				send('recovery ping', {:priority => 1})	# pri-queue ensures that this is run before the next standard item
-				send('criticalish ping', {:priority => 1})
+				send('recovery ping')	# pri-queue ensures that this is run before the next standard item
+				send('criticalish ping')
 			end
 			return false
 		end

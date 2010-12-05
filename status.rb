@@ -5,12 +5,6 @@ module Control
 		
 		@status = {}
 		@status_lock = Mutex.new
-		
-		#
-		# Lock only used in device.rb
-		#
-		@wait_condition = ConditionVariable.new
-		@wait_status = nil
 
 		def [] (status)
 			@status_lock.synchronize {
@@ -23,9 +17,6 @@ module Control
 				old_data = @status[status]
 				@status[status] = data
 				notify_observers(self, status, data) unless data == old_data	# only notify changes
-				if status == @wait_status		# This is another reason to only have a single thread running commands at a time (also prevents interleaving)
-					@wait_condition.signal		# wake up the thread
-				end
 			}
 		end
 		

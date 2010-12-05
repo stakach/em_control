@@ -11,7 +11,6 @@ require 'thread'
 #
 require 'rubygems'
 require 'eventmachine'
-require 'algorithms'
 require 'active_support'
 require 'active_support/core_ext/string'
 
@@ -29,19 +28,19 @@ require './interfaces/communicator.rb'
 require './interfaces/deferred.rb'
 require './system.rb'
 
+
 module Control
 	class Device
 	
 
 		#
-		# TODO::
-		#		rewrite send function removing the send queue
-		#			-- using the recieves queues sleep on pop function if there is no data
-		#			-- This will require a timeout implemented
-		#		Rewrite the recieve function
-		#			-- If the send lock is not active process the recieved data
-		#			-- else add to the recieve queue for the send function to process
-		#		Modify device class to just return the status (no more syncing or timeouts needed)
+		# This is how sending works
+		#		Send recieves data, turns a mutex on and sends the data
+		#			-- It goes into the recieve mutex critical section and sleeps waiting for a response
+		#			-- a timeout is used as a backup in case no response is recieved
+		#		The recieve function does the following
+		#			-- If the send lock is not active it processes the recieved data
+		#			-- otherwise it notifies the send function that data is avaliable
 		#
 		class Base < EventMachine::Connection
 			include Utilities
@@ -50,18 +49,19 @@ module Control
 				super
 		
 				@default_send_options = {	
-					:priority => 0,
 					:wait => true,
 					:retries => 2,
-					:hex_string => false
+					:hex_string => false,
+					:timeout => 5
 				}
 
 				@receive_queue = Queue.new
+				@send_queue = Queue.new
 
 				@receive_lock = Mutex.new
 				@send_lock = Mutex.new  # For in sync send and receives when required
+				@wait_condition = ConditionVariable.new		# for waking and waiting on the revieve data
 		
-				@send_queue = Containers::PriorityQueue.new
 				@last_command = {}
 				
 				@is_connected = false
@@ -86,33 +86,32 @@ module Control
 			# Using EM Queue which schedules tasks in order
 			#
 			def send(data, options = {})
-				@send_lock.synchronize {		# Ensure queue order and queue sizes
-				
-					if !@is_connected
-						return					# do not send when not connected
-					end
+				if !@is_connected
+					return					# do not send when not connected
+				end
 					
-					options = @default_send_options.merge(options)
+				options = @default_send_options.merge(options)
 					
-					#
-					# Make sure we are sending appropriately formatted data
-					#
-					if data.class == Array
-						data = array_to_str(data)
-					elsif options[:hex_string] == true
-						data = hex_to_byte(data)
-					end
+				#
+				# Make sure we are sending appropriately formatted data
+				#
+				if data.class == Array
+					data = array_to_str(data)
+				elsif options[:hex_string] == true
+					data = hex_to_byte(data)
+				end
 
-					options[:data] = data
-					options[:retries] = 0 if options[:wait] == false
-					#@send_queue.push(options, options[:priority]) # Lets not do this
-			
-					waitingResponse = @last_command[:wait] == true	# must do this incase :wait == nil
-			
-					#if !waitingResponse
-						@last_command = options
-						process_send
-					#end
+				options[:data] = data
+				options[:retries] = 0 if options[:wait] == false
+				
+				@send_queue.push(options)
+				
+				if @send_lock.locked?
+					return
+				end
+				
+				@send_lock.synchronize {		# Ensure queue order and queue sizes
+					process_send
 				}
 			rescue
 				#
@@ -134,7 +133,18 @@ module Control
 			# EM Callbacks: --------------------------------------------------------
 			#
 			def post_init
-				
+				return unless @parent.respond_to?(:initiate_session)
+				operation = proc {
+					begin
+						@parent.initiate_session
+					rescue
+						#
+						# save from bad user code (don't want to deplete thread pool)
+						#	TODO:: add logger
+						#
+					end
+				}
+				EM.defer(operation)
 			end
 
 	
@@ -145,6 +155,8 @@ module Control
 				@last_command[:wait] = false if !@last_command[:wait].nil?	# re-start event process
 				@connect_retry = 0
 				@is_connected = true
+				
+				return unless @parent.respond_to?(:connected)
 				operation = proc {
 					begin
 						@parent.connected
@@ -155,15 +167,25 @@ module Control
 						#
 					end
 				}
-				EM.defer(operation) if @parent.respond_to?(:connected)
+				EM.defer(operation)
 			end
 
   
 			def receive_data(data)
-				@receive_queue.push(data)
+				@receive_lock.synchronize {
+					@receive_queue.push(data)
 
-				operation = proc { self.process_data }
-				EM.defer(operation)
+					if @send_lock.locked?
+						begin
+							@timeout.cancel	# incase the timer is not active or nil
+						rescue
+						end
+						@wait_condition.signal		# signal the thread to wakeup
+					else
+						operation = proc { self.process_data }
+						EM.defer(operation)
+					end
+				}
 			end
 
 
@@ -206,74 +228,81 @@ module Control
 			#
 			
 
-			protected
+			private
 
 
 			#
 			# Controls the flow of data for retry puropses
 			#
 			def process_data
-				@receive_lock.synchronize {			# Lock ensures that serialisation of events per-device module
-				
-					succeeded = nil
-					if @parent.respond_to?(:received)
-		
-						succeeded = @parent.received(str_to_array(@receive_queue.pop(true)))	# non-blocking call (will crash if there is no data)
-
-						@send_lock.synchronize {		# received call can call send so must sync here
-							if succeeded == false
-								if @send_queue.has_priority?(@last_command[:priority] + 1) == false && @last_command[:retries] > 0	# no user defined replacements
-									@last_command[:retries] -= 1
-									@send_queue.push(@last_command, @last_command[:priority] + 1)
-							
-									process_send
-								elsif @send_queue.has_priority?(@last_command[:priority] + 1) == false	# user defined replacement for retry
-									process_send
-								else
-									next_command	# give up and continue processing
-								end
-							elsif succeeded == true
-								next_command		# success so continue processing
-							end
-						}
-					
-					#
-					# If no receive function is defined process the next command
-					#
-					else
-						@receive_queue.pop(true)	# this is thread safe
-						@send_lock.synchronize {
-							next_command
-						}
-					end
-				}
-				
+				if @parent.respond_to?(:received)
+					return @parent.received(str_to_array(@receive_queue.pop(true)))	# non-blocking call (will crash if there is no data)
+				else	# If no receive function is defined process the next command
+					@receive_queue.pop(true)
+					return true
+				end
 			rescue
 				#
 				# save from bad user code (don't want to deplete thread pool)
 				#	This error should be logged in some consistent manner
 				#	TODO:: Create logger
 				#
-				@receive_queue.pop(true)
-				@send_lock.synchronize {
-					next_command
-				}
+				return true
 			end
-
-
-			private
 	
 	
 			#
-			# Ready state for next command
+			# Ready state for next attempt
 			#	WARN:: Must be called in send_lock critical section
 			#
-			def next_command
-				if @send_queue.size > 0
-					process_send
-				else
-					@last_command[:wait] = false
+			def attempt_retry
+				if @send_queue.empty? && @last_command[:retries] > 0	# no user defined replacements
+					@last_command[:retries] -= 1
+					@send_queue.push(@last_command)
 				end
+			end
+			
+			def wait_response
+				@receive_lock.synchronize {
+					if @receive_queue.empty?
+						@timeout = EventMachine::Timer.new(@last_command[:timeout]) do 
+							@receive_lock.synchronize {
+								@wait_condition.signal		# wake up the thread
+							}
+							#
+							# TODO:: log the event here
+							#	EM.defer(proc {log_issue})	# lets not waste time in this thread
+							#
+						end
+						@wait_condition.wait(@receive_lock)
+					end
+				}
+			end
+			
+			def process_response
+				num_rets = @last_command[:retries]
+				begin
+					wait_response
+						
+					if not @receive_queue.empty?
+						response = process_data
+						if response == false
+							attempt_retry
+							return
+						elsif response == true
+							return
+						end
+					else	# the wait timeout occured - retry command
+						attempt_retry
+						return
+					end
+
+				#
+				# If we haven't returned before we reach this point then the last data was
+				#	not relavent and we are still waiting (max wait == num_retries * timeout)
+				#
+				num_rets -= 1
+				end while num_rets > 0
 			end
 
 			#
@@ -281,20 +310,29 @@ module Control
 			#	WARN:: Must be called in send_lock critical section
 			#
 			def process_send
-				data = @send_queue.pop
-				@last_command = data
-
-				EM.schedule proc {
-					begin
-						if !error?
-							send_data(data[:data])
+				begin
+					data = @send_queue.pop(true)
+					@last_command = data
+					
+					EM.schedule proc {
+						begin
+							if !error?
+								send_data(data[:data])
+							end
+						rescue
+							#
+							# Save the thread in case of bad data in that send
+							#
 						end
-					rescue
-						#
-						# Save the thread in case of bad data in that send
-						#
+					}
+				
+					#
+					#	Synchronize the response
+					#
+					if data[:wait]
+							process_response
 					end
-				}
+				end while not @send_queue.empty?
 			end
 		end
 	end
