@@ -57,7 +57,7 @@ module Control
 				#end
 				send_prompt("> ", :green)
 				@input = ""
-			elsif data =~ /^[a-zA-Z0-9\. ]*$/
+			elsif data =~ /^[a-zA-Z0-9\. _-]*$/
 				@input << data
 			end
 		end

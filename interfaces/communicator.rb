@@ -96,7 +96,7 @@ class Communicator
 		#	String
 		#
 		mod = mod.to_sym if mod.class == String
-
+		p "#{mod} #{command}"
 		begin
 			@command_lock.synchronize {
 				@system.modules[mod].__send__(command, *args)	# Not send string however call function command

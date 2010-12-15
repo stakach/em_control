@@ -3,8 +3,7 @@ module Control
 	module Status
 		include Observable
 		
-		@status = {}
-		@status_lock = Mutex.new
+		
 
 		def [] (status)
 			@status_lock.synchronize {

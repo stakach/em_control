@@ -3,6 +3,14 @@ module Control
 	class Device
 		include Status	# The observable pattern (Should not be called directly)
 		include Constants
+		
+		def initialize
+			#
+			# Status variables
+			#
+			@status = {}
+			@status_lock = Mutex.new
+		end
 
 		#
 		# Sets up a link for the user code to the eventmachine class
@@ -20,12 +28,8 @@ module Control
 
 
 		def send(data, options = {})
-			if !options[:wait_emit].nil?
-				@base.send(data, options)
-				return @status[options[:wait_emit]]
-			else
-				@base.send(data, options)
-			end
+			@base.send(data, options)
+			return @status[options[:emit]] if !options[:emit].nil?
 		end
 
 

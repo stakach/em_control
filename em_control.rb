@@ -50,6 +50,7 @@ module Control
 		
 				@default_send_options = {	
 					:wait => true,
+					:max_waits => 3,
 					:retries => 2,
 					:hex_string => false,
 					:timeout => 5
@@ -241,12 +242,14 @@ module Control
 					@receive_queue.pop(true)
 					return true
 				end
-			rescue
+			rescue => e
 				#
 				# save from bad user code (don't want to deplete thread pool)
 				#	This error should be logged in some consistent manner
 				#	TODO:: Create logger
 				#
+				p e.message
+				p e.backtrace
 				return true
 			end
 	
@@ -280,7 +283,7 @@ module Control
 			end
 			
 			def process_response
-				num_rets = @last_command[:retries]
+				num_rets = @last_command[:max_waits]
 				begin
 					wait_response
 						
@@ -297,11 +300,11 @@ module Control
 						return
 					end
 
-				#
-				# If we haven't returned before we reach this point then the last data was
-				#	not relavent and we are still waiting (max wait == num_retries * timeout)
-				#
-				num_rets -= 1
+					#
+					# If we haven't returned before we reach this point then the last data was
+					#	not relavent and we are still waiting (max wait == num_retries * timeout)
+					#
+					num_rets -= 1
 				end while num_rets > 0
 			end
 

@@ -1,7 +1,7 @@
 room_123:
   devices:
-    nec_proj:
+    all_nec:
       names: [projector1, projector]
-      ip: "127.0.0.1"
-      port: 8081
+      ip: "172.16.166.238"
+      port: 7142
 
