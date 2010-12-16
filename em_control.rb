@@ -4,6 +4,7 @@
 require 'observer'
 require 'yaml'
 require 'thread'
+require 'monitor'
 
 
 #
@@ -58,9 +59,12 @@ module Control
 
 				@receive_queue = Queue.new
 				@send_queue = Queue.new
+				@pri_queue = Queue.new
+				@pri_queue.extend(MonitorMixin)
 
 				@receive_lock = Mutex.new
 				@send_lock = Mutex.new  # For in sync send and receives when required
+				@critical_lock = Mutex.new
 				@wait_condition = ConditionVariable.new		# for waking and waiting on the revieve data
 		
 				@last_command = {}
@@ -105,20 +109,41 @@ module Control
 				options[:data] = data
 				options[:retries] = 0 if options[:wait] == false
 				
-				@send_queue.push(options)
 				
+				#
+				# Use a monitor here to allow for re-entrant locking
+				#	This will allow for a priority queue and then we guarentee order of operations
+				#
+				@critical_lock.lock
+
 				if @send_lock.locked?
+					@critical_lock.unlock
+
+					if @pri_queue.mon_try_enter
+						@pri_queue.push(options)
+						@pri_queue.mon_exit
+					else
+						@send_queue.push(options)
+					end
 					return
+				else
+					@send_queue.push(options)
 				end
 				
 				@send_lock.synchronize {		# Ensure queue order and queue sizes
-					process_send
+					@critical_lock.unlock
+
+					@pri_queue.synchronize do
+						process_send
+					end
 				}
-			rescue
+			rescue => e
 				#
 				# save from bad user code (ie bad data)
 				#	TODO:: add logger
 				#
+				p e.message
+				p e.backtrace
 			end
 	
 	
@@ -126,7 +151,7 @@ module Control
 			# Function for user code
 			#
 			def last_command
-				return @last_command[:data]
+				return str_to_array(@last_command[:data])
 			end
 			
 
@@ -229,7 +254,7 @@ module Control
 			#
 			
 
-			private
+			#private
 
 
 			#
@@ -258,10 +283,12 @@ module Control
 			# Ready state for next attempt
 			#	WARN:: Must be called in send_lock critical section
 			#
+			#	A return false will always retry the command at the end of the queue
+			#
 			def attempt_retry
-				if @send_queue.empty? && @last_command[:retries] > 0	# no user defined replacements
+				if @pri_queue.empty? && @last_command[:retries] > 0	# no user defined replacements
 					@last_command[:retries] -= 1
-					@send_queue.push(@last_command)
+					@pri_queue.push(@last_command)
 				end
 			end
 			
@@ -314,7 +341,12 @@ module Control
 			#
 			def process_send
 				begin
-					data = @send_queue.pop(true)
+					if @pri_queue.empty?
+						data = @send_queue.pop(true)
+					else
+						data = @pri_queue.pop(true)
+					end
+					
 					@last_command = data
 					
 					EM.schedule proc {
@@ -335,7 +367,7 @@ module Control
 					if data[:wait]
 							process_response
 					end
-				end while not @send_queue.empty?
+				end while !@send_queue.empty? || !@pri_queue.empty?
 			end
 		end
 	end

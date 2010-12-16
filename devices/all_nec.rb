@@ -69,34 +69,38 @@ class AllNec < Control::Device
 
 	# Return true if command success, nil if still waiting, false if fail
 	def received(data)
-		p "-- proj sent data"
-		return case data[1]
+		case data[1]
 			when 0x00, 0x01
-				p "-- power on/off"
-				process_power_command(data)
+				p "-- proj sent power command"
+				return process_power_command(data)
 			when 0x81
-				p "-- power stat"
-				process_power_status(data)
+				p "-- proj sent power status command"
+				return process_power_status(data)
 			when 0xC0
-				p "-- unit stat"
-				true
+				p "-- proj sent working state command"
 		end
 		
-		return nil	# if we were not expecting this response
+		p "-- proj sent unknown response"
+		return true	# to prevent retries on commands we were not expecting
 	end
+	
 	
 	private
 	
 
 	def process_power_command(data)
-		if data[1] == 0x00
-			self[:power_target] = On
-		else
-			self[:power_target] = Off
+		last = last_command
+		if last[1] == 0x00 || last[1] == 0x01
+			if data[1] == 0x00
+				self[:power_target] = On
+			else
+				self[:power_target] = Off
+			end
+			
+			send(COMMAND[:status_power], :hex_string => true)	# Queues the status power command
 		end
 		
-		send(COMMAND[:status_power], :hex_string => true)	# Queues the status power command
-		return true						# Command success
+		return true												# Command success
 	end
 	
 	def process_power_status(data)
@@ -111,17 +115,17 @@ class AllNec < Control::Device
 				self[:lamp_cooling] = false
 				self[:lamp_warming] = true
 	
-				p "lamp warming..."			
+				p "lamp warming..."
+						
 	
 			elsif self[:power_target] == Off
 				self[:lamp_warming] = false
 				self[:lamp_cooling] = true
 				
 				p "lamp cooling..."
-				
 			end
 
-			sleep(3)						# pause this thread for 3 seconds
+			sleep(3)											# pause this thread for 3 seconds
 			send(COMMAND[:status_power], :hex_string => true)	# Then re-queue this command			
 
 		elsif (data[5] & 0x40) > 0	# Selecting signal processing
