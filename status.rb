@@ -15,8 +15,12 @@ module Control
 			@status_lock.synchronize {
 				old_data = @status[status]
 				@status[status] = data
-				notify_observers(self, status, data) unless data == old_data	# only notify changes
+				if @status_emit.has_key?(status)
+					var = @status_emit.delete(status)
+					var.broadcast
+				end
 			}
+			notify_observers(self, status, data) unless data == old_data	# only notify changes
 		end
 		
 		attr_reader :status	# Should not be accessed like this for modification

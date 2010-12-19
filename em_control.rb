@@ -89,6 +89,8 @@ module Control
 
 			#
 			# Using EM Queue which schedules tasks in order
+			#	Returns false if command queued (for execution on another thread)
+			#	True if processed on this thread
 			#
 			def send(data, options = {})
 				if !@is_connected
@@ -119,13 +121,13 @@ module Control
 				if @send_lock.locked?
 					@critical_lock.unlock
 
-					if @pri_queue.mon_try_enter
+					if @pri_queue.mon_try_enter		# Does this thread own the send_lock?
 						@pri_queue.push(options)
 						@pri_queue.mon_exit
 					else
-						@send_queue.push(options)
+						@send_queue.push(options)	# If not then it must be another thread
 					end
-					return
+					return false
 				else
 					@send_queue.push(options)
 				end
@@ -137,6 +139,8 @@ module Control
 						process_send
 					end
 				}
+				
+				return true
 			rescue => e
 				#
 				# save from bad user code (ie bad data)
@@ -144,6 +148,7 @@ module Control
 				#
 				p e.message
 				p e.backtrace
+				return true
 			end
 	
 	
@@ -160,17 +165,16 @@ module Control
 			#
 			def post_init
 				return unless @parent.respond_to?(:initiate_session)
-				operation = proc {
-					begin
-						@parent.initiate_session
-					rescue
-						#
-						# save from bad user code (don't want to deplete thread pool)
-						#	TODO:: add logger
-						#
-					end
-				}
-				EM.defer(operation)
+
+				
+				begin
+					@parent.initiate_session
+				rescue
+					#
+					# save from bad user code (don't want to deplete thread pool)
+					#	TODO:: add logger
+					#
+				end
 			end
 
 	
@@ -183,7 +187,8 @@ module Control
 				@is_connected = true
 				
 				return unless @parent.respond_to?(:connected)
-				operation = proc {
+
+				EM.defer do
 					begin
 						@parent.connected
 					rescue
@@ -192,26 +197,26 @@ module Control
 						#	TODO:: add logger
 						#
 					end
-				}
-				EM.defer(operation)
+				end
 			end
 
   
 			def receive_data(data)
-				@receive_lock.synchronize {
-					@receive_queue.push(data)
-
-					if @send_lock.locked?
-						begin
-							@timeout.cancel	# incase the timer is not active or nil
-						rescue
+				@receive_queue.push(data)
+				
+				EM.defer do
+					@receive_lock.synchronize {
+						if @send_lock.locked?
+							begin
+								@timeout.cancel	# incase the timer is not active or nil
+							rescue
+							end
+							@wait_condition.signal		# signal the thread to wakeup
+						else
+							self.process_data
 						end
-						@wait_condition.signal		# signal the thread to wakeup
-					else
-						operation = proc { self.process_data }
-						EM.defer(operation)
-					end
-				}
+					}
+				end
 			end
 
 
@@ -219,17 +224,18 @@ module Control
 				# set offline
 				@is_connected = false				
 
-				operation = proc {
-					begin
-						@parent.disconnected
-					rescue
-						#
-						# save from bad user code (don't want to deplete thread pool)
-						#	TODO:: add logger
-						#
+				if @parent.respond_to?(:disconnected)
+					EM.defer do
+						begin
+							@parent.disconnected
+						rescue
+							#
+							# save from bad user code (don't want to deplete thread pool)
+							#	TODO:: add logger
+							#
+						end
 					end
-				}
-				EM.defer(operation) if @parent.respond_to?(:disconnected)
+				end
 				
 				# attempt re-connect
 				#	if !make and break

@@ -8,5 +8,15 @@ module Control
 	class Logic
 		include Status
 		include Constants
+		
+
+		def task callback = nil, &block
+			if callback.nil?
+				EM.defer(block)
+			else
+				EM.defer(block, callback)
+			end
+		end
+		
 	end
 end

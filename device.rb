@@ -10,6 +10,7 @@ module Control
 			#
 			@status = {}
 			@status_lock = Mutex.new
+			@status_emit = {}	# status => condition_variable
 		end
 
 		#
@@ -25,11 +26,28 @@ module Control
 		def last_command	# get the last command sent that was (this is very contextual)
 			@base.last_command
 		end
+		
+
+		protected
 
 
 		def send(data, options = {})
-			@base.send(data, options)
-			return @status[options[:emit]] if !options[:emit].nil?
+			inline = @base.send(data, options)
+			if !options[:emit].nil?
+				@status_lock.synchronize {
+					return @status[options[:emit]] if inline == true
+				
+					#
+					# The command is queued - we need to wait for the status to be emited
+					#
+					if @status_emit[options[:emit]].nil?
+						@status_emit[options[:emit]] = ConditionVariable.new
+					end
+					@status_emit[options[:emit]].wait
+					
+					return @status[options[:emit]]
+				}
+			end
 		end
 
 
