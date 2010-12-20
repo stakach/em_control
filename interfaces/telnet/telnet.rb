@@ -8,8 +8,8 @@ module Control
 	class TelnetServer < Deferred
 
 		def self.start
-			EventMachine::start_server "127.0.0.1", 8080, TelnetServer
-			puts 'running telnet server on 8080'
+			EventMachine::start_server "127.0.0.1", 8081, TelnetServer
+			puts 'running telnet server on 8081'
 		end
  
 		def received
@@ -33,28 +33,31 @@ module Control
 					disconnect
 					return
 				end
-				#begin
-					if @input != "" && !@input.nil?
-						if @selected.nil?
-							if @input =~ /^\d+$/
-								@selected = Communicator.select(self, @input.to_i)
-							else
-								@selected = Communicator.select(self, @input)
-							end
-							send_line " system #{@input} selected...", :green
+
+				if @input != "" && !@input.nil?
+					if @selected.nil?
+						if @input =~ /^\d+$/
+							@selected = Communicator.select(self, @input.to_i)
 						else
-							thecommand = @input.split(' ', 3)
-							if thecommand[2].nil?
-								@selected.send(thecommand[0], thecommand[1]) { send_prompt(" invalid command", :green) }
-							else
-								@selected.send(thecommand[0], thecommand[1], thecommand[2]) { send_prompt(" invalid command", :green) }
-							end
-							send_line " sent...", :green
+							@selected = Communicator.select(self, @input)
 						end
+						send_line " system #{@input} selected...", :green
+					else
+						thecommand = @input.split(' ', 3)
+						@input = ""
+						if thecommand[0] =~ /register/i
+							@selected.register(self, thecommand[1], thecommand[2]) { send_prompt(" invalid command", :green) }
+						elsif thecommand[0] =~ /unregister/i
+							@selected.unregister(self, thecommand[1], thecommand[2]) { send_prompt(" invalid command", :green) }
+						elsif thecommand[2].nil?
+							@selected.send_command(thecommand[0], thecommand[1]) { send_prompt(" invalid command", :green) }
+						else
+							@selected.send_command(thecommand[0], thecommand[1], thecommand[2]) { send_prompt(" invalid command", :green) }
+						end
+						send_line " sent...", :green
 					end
-				#rescue
-				#	send_line "  Invalid command...", :green
-				#end
+				end
+
 				send_prompt("> ", :green)
 				@input = ""
 			elsif data =~ /^[a-zA-Z0-9\. _-]*$/
@@ -63,7 +66,9 @@ module Control
 		end
 		
 		def notify(mod_sym, stat_sym, data)
-			
+			send_line("\r\nStatus: #{mod_sym}:#{stat_sym}==#{data}", :green)
+			send_prompt("> ", :green)
+			send(@input) if !@input.empty?
 		end
 	
 		protected

@@ -52,45 +52,77 @@ class Communicator
 	#
 	# Keep track of status events
 	#
-	def register(interface, mod, status)
-		mod_sym = mod.to_sym if mod.class == String	# remember the symbol used by the interface to reference this module
+	def register(interface, mod, status, &block)
+		mod_sym = mod.class == String ? mod.to_sym : mod	# remember the symbol used by the interface to reference this module
 		status = status.to_sym if status.class == String
 		
 		mod = @system.modules[mod_sym]
 
 		@status_register[mod] ||= {}
-		@status_register[mod][status] ||= []
-		@status_register[mod][status] << [interface, mod_sym]
+		@status_register[mod][status] ||= {}
+		@status_register[mod][status][interface] = mod_sym
 		
 		mod.add_observer(self)
+	rescue
+		begin
+			block.call() if !block.nil?	# Block will inform of any errors
+		rescue => e
+			p e.message
+			p e.backtrace
+		end
 	end
 
-	def unregister(interface, mod, status)
+	def unregister(interface, mod, status, &block)
 		mod_sym = mod.to_sym if mod.class == String
 		status = status.to_sym if status.class == String
 		
 		mod = @system.modules[mod_sym]
-		@status_register[mod][status] ||= []
+		@status_register[mod] ||= {}
+		@status_register[mod][status] ||= {}
 		@status_register[mod][status].delete(interface)
 
 		if @status_register[mod][status].empty?
 			mod.delete_observer(self)
 		end
+	rescue
+		begin
+			block.call() if !block.nil?	# Block will inform of any errors
+		rescue => e
+			p e.message
+			p e.backtrace
+		end
 	end
 
 	def update(mod, status, data)
-		return if @status_register[mod][status].nil?
+		p "COM: status update called"
+		return if @status_register[mod].nil? || @status_register[mod][status].nil?
 		
 		#
 		# Interfaces should implement the notify function
+		#	Or a function for that particular event
 		#
-		@status_register[mod][status].each {|interface| interface[0].notify(interface[1], status, data) }
+		@status_register[mod][status].each_pair do |interface, mod|
+			begin
+				function = "#{mod}_#{status}_changed".to_sym
+				if interface.respond_to?(function)
+					interface.__send__(function, data)
+				else
+					interface.notify(mod, status, data)
+				end
+			rescue => e
+				p e.message
+				p e.backtrace
+			end
+		end
+	rescue => e
+		p e.message
+		p e.backtrace
 	end
 	
 	#
 	# Pass commands to the selected system
 	#
-	def send(mod, command, *args, &block)
+	def send_command(mod, command, *args, &block)
 		#
 		# Accept String, String (argument)
 		#	String
@@ -99,12 +131,14 @@ class Communicator
 		p "#{mod} #{command}"
 		begin
 			@command_lock.synchronize {
-				@system.modules[mod].__send__(command, *args)	# Not send string however call function command
+				@system.modules[mod].public_send(command, *args)	# Not send string however call function command
 			}
 		rescue
 			begin
 				block.call() if !block.nil?	# Block will inform of any errors
-			rescue
+			rescue => e
+				p e.message
+				p e.backtrace
 			end
 		end
 	end

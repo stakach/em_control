@@ -136,6 +136,7 @@ class AllNec < Control::Device
 			# We are in a stable state!
 			#
 			if self[:power] != self[:power_target]
+				sleep(3)
 				if self[:power_target] == On
 					send(COMMAND[:lamp_on], :hex_string => true)
 				elsif self[:power_target] == Off

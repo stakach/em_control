@@ -14,13 +14,25 @@ module Control
 		end
 		
 		def post_init
-			self.initiate_session if self.respond_to?(:initiate_session)
+			return unless self.respond_to?(:initiate_session)
+			begin
+				self.initiate_session
+			rescue => e
+				p e.message
+				p e.backtrace
+			end
 		end
 		
 		def connection_completed
 			if self.respond_to?(:connected)
-				operation = proc { self.connected }
-				EM.defer(operation)
+				EM.defer do
+					begin
+						self.connected
+					rescue => e
+						p e.message
+						p e.backtrace
+					end
+				end
 			end
 		end
 		
@@ -30,8 +42,14 @@ module Control
 		
 		def receive_data(data)
 			@receive_queue.push(data)
-			operation = proc { self.received }
-			EM.defer(operation)
+			EM.defer do
+				begin
+					self.received
+				rescue => e
+					p e.message
+					p e.backtrace
+				end
+			end
 		end
 	end
 end

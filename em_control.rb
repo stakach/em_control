@@ -74,9 +74,11 @@ module Control
 
 				#
 				# Configure links between objects (This is a very loose tie)
+				#	Relies on serial loading of modules
 				#
 				@parent = Modules.last
 				@parent.setbase(self)
+				@tls_enabled = Modules.connections[@parent][2]
 			end
 	
 			attr_reader :is_connected
@@ -133,12 +135,11 @@ module Control
 				end
 				
 				@send_lock.synchronize {		# Ensure queue order and queue sizes
-					@critical_lock.unlock
-
 					@pri_queue.synchronize do
-						process_send
+						process_send			# NOTE::critical lock is released in process send
 					end
 				}
+				@critical_lock.unlock			# NOTE::Locked in process send so requires unlocking here
 				
 				return true
 			rescue => e
@@ -146,6 +147,7 @@ module Control
 				# save from bad user code (ie bad data)
 				#	TODO:: add logger
 				#
+				@critical_lock.unlock			# Just in case
 				p e.message
 				p e.backtrace
 				return true
@@ -164,17 +166,22 @@ module Control
 			# EM Callbacks: --------------------------------------------------------
 			#
 			def post_init
+				start_tls if @tls_enabled								# If we are using tls or ssl
 				return unless @parent.respond_to?(:initiate_session)
-
 				
 				begin
-					@parent.initiate_session
+					@parent.initiate_session(@tls_enabled)
 				rescue
 					#
 					# save from bad user code (don't want to deplete thread pool)
 					#	TODO:: add logger
 					#
 				end
+			end
+			
+
+			def ssl_handshake_completed
+				call_connected				# this will mark the true connection complete stage for encrypted devices
 			end
 
 	
@@ -184,19 +191,9 @@ module Control
 				resume if paused?
 				@last_command[:wait] = false if !@last_command[:wait].nil?	# re-start event process
 				@connect_retry = 0
-				@is_connected = true
 				
-				return unless @parent.respond_to?(:connected)
-
-				EM.defer do
-					begin
-						@parent.connected
-					rescue
-						#
-						# save from bad user code (don't want to deplete thread pool)
-						#	TODO:: add logger
-						#
-					end
+				if !@tls_enabled
+					call_connected
 				end
 			end
 
@@ -347,6 +344,7 @@ module Control
 			#
 			def process_send
 				begin
+					@critical_lock.unlock
 					if @pri_queue.empty?
 						data = @send_queue.pop(true)
 					else
@@ -373,7 +371,29 @@ module Control
 					if data[:wait]
 							process_response
 					end
+					@critical_lock.lock
 				end while !@send_queue.empty? || !@pri_queue.empty?
+			end
+			
+
+			private
+			
+
+			def call_connected
+				@is_connected = true
+				
+				return unless @parent.respond_to?(:connected)
+
+				EM.defer do
+					begin
+						@parent.connected
+					rescue
+						#
+						# save from bad user code (don't want to deplete thread pool)
+						#	TODO:: add logger
+						#
+					end
+				end
 			end
 		end
 	end
@@ -396,7 +416,8 @@ module Control
 								system.modules << device
 								ip = nil
 								port = nil
-								p value		# the print command
+								tls = false
+								p value		# TODO:: Log the command
 								value.each do |field, data|
 									case field.to_sym
 										when :names
@@ -411,13 +432,32 @@ module Control
 											ip = data
 										when :port
 											port = data.to_i
+										when :tls
+											tls = !(/^true$/i =~ data).nil?
 									end
 								end
-								Modules.connections[device] = [ip, port]
+								Modules.connections[device] = [ip, port, tls]
 								EM.connect ip, port, Device::Base
 							end
 						when :controllers
-							
+							mod_name.each do |key, value|
+								require "./controllers/#{key}.rb"
+								control = key.classify.constantize.new(system)
+								system.modules << control
+								p value		# TODO:: Log the command
+								value.each do |field, data|
+									case field.to_sym
+										when :names
+											symdata = []
+											data.each {|item|
+												item = item.to_sym
+												system.modules[item] = device
+												symdata << item
+											}
+											system.modules[device] = symdata
+									end
+								end
+							end
 					end
 				end
 			end
@@ -427,8 +467,14 @@ module Control
 			#devices[:projector1] = Devices.last
 			#Devices.connections[Devices.last] = ["127.0.0.1", 8081]
 			#EM.connect "127.0.0.1", 8081, Device::Base
+			
+
+			#
+			# AutoLoad the interfaces
+			#
 			require './interfaces/telnet/telnet.rb'
 			TelnetServer.start
+			require './interfaces/html5/html5.rb'
 		end
 	end
 end
