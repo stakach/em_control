@@ -31,6 +31,7 @@ class Communicator
 	#
 	def self.select(interface, system)
 		if system.class == Fixnum
+			
 			return System.systems[System.systems.keys[system]].communicator.attach(interface)
 		else
 			system = system.to_sym if system.class == String
@@ -63,6 +64,22 @@ class Communicator
 		@status_register[mod][status][interface] = mod_sym
 		
 		mod.add_observer(self)
+		
+		#
+		# Send the status to this requestor!
+		#	This is the same as in update
+		#
+		begin
+			function = "#{mod_sym}_#{status}_changed".to_sym
+			if interface.respond_to?(function)
+				interface.__send__(function, mod[status])
+			else
+				interface.notify(mod_sym, status, mod[status])
+			end
+		rescue => e
+			p e.message
+			p e.backtrace
+		end
 	rescue
 		begin
 			block.call() if !block.nil?	# Block will inform of any errors
@@ -122,7 +139,7 @@ class Communicator
 	#
 	# Pass commands to the selected system
 	#
-	def send_command(mod, command, *args, &block)
+	def send_command(mod, command, args = [], &block)
 		#
 		# Accept String, String (argument)
 		#	String
@@ -154,7 +171,7 @@ class Communicator
 
 
 	def unregister_all(interface)
-		# TODO
+		# TODO:: Important to stop memory leaks
 	end
 end
 end

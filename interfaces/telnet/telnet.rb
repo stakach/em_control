@@ -8,8 +8,8 @@ module Control
 	class TelnetServer < Deferred
 
 		def self.start
-			EventMachine::start_server "127.0.0.1", 8081, TelnetServer
-			puts 'running telnet server on 8081'
+			EventMachine::start_server "127.0.0.1", 23, TelnetServer
+			puts 'running telnet server on 23'
 		end
  
 		def received

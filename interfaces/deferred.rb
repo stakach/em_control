@@ -11,6 +11,7 @@ module Control
 
 			@selected = nil
 			@receive_queue = Queue.new
+			@command_lock = Mutex.new
 		end
 		
 		def post_init
@@ -44,7 +45,9 @@ module Control
 			@receive_queue.push(data)
 			EM.defer do
 				begin
-					self.received
+					@command_lock.synchronize {
+						self.received
+					}
 				rescue => e
 					p e.message
 					p e.backtrace
