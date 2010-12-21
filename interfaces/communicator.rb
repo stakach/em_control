@@ -69,16 +69,18 @@ class Communicator
 		# Send the status to this requestor!
 		#	This is the same as in update
 		#
-		begin
-			function = "#{mod_sym}_#{status}_changed".to_sym
-			if interface.respond_to?(function)
-				interface.__send__(function, mod[status])
-			else
-				interface.notify(mod_sym, status, mod[status])
+		if !mod[status].nil?
+			begin
+				function = "#{mod_sym}_#{status}_changed".to_sym
+				if interface.respond_to?(function)
+					interface.__send__(function, mod[status])
+				else
+					interface.notify(mod_sym, status, mod[status])
+				end
+			rescue => e
+				p e.message
+				p e.backtrace
 			end
-		rescue => e
-			p e.message
-			p e.backtrace
 		end
 	rescue
 		begin
