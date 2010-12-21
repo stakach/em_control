@@ -13,7 +13,7 @@ class Communicator
 		@system = system
 		@connected_interfaces = []
 		@command_lock = Mutex.new
-
+		@status_lock = Mutex.new
 		@status_register = {}
 	end
 
@@ -47,6 +47,12 @@ class Communicator
 	#
 	def disconnected(interface)
 		@connected_interfaces.delete(interface)
+		#
+		# Refactor::
+		#	@connected_interfaces to a hash
+		#	The hash contains and array of status hashes that contain the interface as a key
+		#	Delete the key from each of those interfaces 
+		#		
 	end
 
 
@@ -59,9 +65,11 @@ class Communicator
 		
 		mod = @system.modules[mod_sym]
 
-		@status_register[mod] ||= {}
-		@status_register[mod][status] ||= {}
-		@status_register[mod][status][interface] = mod_sym
+		@status_lock.synchronize {
+			@status_register[mod] ||= {}
+			@status_register[mod][status] ||= {}
+			@status_register[mod][status][interface] = mod_sym
+		}
 		
 		mod.add_observer(self)
 		
@@ -72,11 +80,13 @@ class Communicator
 		if !mod[status].nil?
 			begin
 				function = "#{mod_sym}_#{status}_changed".to_sym
-				if interface.respond_to?(function)
-					interface.__send__(function, mod[status])
-				else
-					interface.notify(mod_sym, status, mod[status])
-				end
+				@status_lock.synchronize {
+					if interface.respond_to?(function)
+						interface.__send__(function, mod[status])
+					else
+						interface.notify(mod_sym, status, mod[status])
+					end
+				}
 			rescue => e
 				p e.message
 				p e.backtrace
@@ -96,13 +106,16 @@ class Communicator
 		status = status.to_sym if status.class == String
 		
 		mod = @system.modules[mod_sym]
-		@status_register[mod] ||= {}
-		@status_register[mod][status] ||= {}
-		@status_register[mod][status].delete(interface)
 
-		if @status_register[mod][status].empty?
-			mod.delete_observer(self)
-		end
+		@status_lock.synchronize {
+			@status_register[mod] ||= {}
+			@status_register[mod][status] ||= {}
+			@status_register[mod][status].delete(interface)
+
+			if @status_register[mod][status].empty?
+				mod.delete_observer(self)
+			end
+		}
 	rescue
 		begin
 			block.call() if !block.nil?	# Block will inform of any errors
@@ -114,25 +127,27 @@ class Communicator
 
 	def update(mod, status, data)
 		p "COM: status update called"
-		return if @status_register[mod].nil? || @status_register[mod][status].nil?
+		@status_lock.synchronize {
+			return if @status_register[mod].nil? || @status_register[mod][status].nil?
 		
-		#
-		# Interfaces should implement the notify function
-		#	Or a function for that particular event
-		#
-		@status_register[mod][status].each_pair do |interface, mod|
-			begin
-				function = "#{mod}_#{status}_changed".to_sym
-				if interface.respond_to?(function)
-					interface.__send__(function, data)
-				else
-					interface.notify(mod, status, data)
+			#
+			# Interfaces should implement the notify function
+			#	Or a function for that particular event
+			#
+			@status_register[mod][status].each_pair do |interface, mod|
+				begin
+					function = "#{mod}_#{status}_changed".to_sym
+					if interface.respond_to?(function)
+						interface.__send__(function, data)
+					else
+						interface.notify(mod, status, data)
+					end
+				rescue => e
+					p e.message
+					p e.backtrace
 				end
-			rescue => e
-				p e.message
-				p e.backtrace
 			end
-		end
+		}
 	rescue => e
 		p e.message
 		p e.backtrace
