@@ -18,7 +18,8 @@ class HTML5Monitor
 	end
 	
 	def self.unregister(id)
-		@@clients.delete(id)
+		client = @@clients.delete(id)
+		client.disconnected
 	end
 	
 	def self.count
@@ -37,6 +38,10 @@ class HTML5Monitor
 		@socket = socket
 		@system = nil
 		@command_lock = Mutex.new
+	end
+	
+	def disconnected
+		@system.disconnected(self) unless @system.nil?
 	end
 	
 	def receive(data)

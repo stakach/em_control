@@ -11,10 +11,12 @@ class Communicator
 
 	def initialize(system)
 		@system = system
-		@connected_interfaces = []
+		
 		@command_lock = Mutex.new
 		@status_lock = Mutex.new
+		
 		@status_register = {}
+		@connected_interfaces = {}
 	end
 
 	
@@ -46,13 +48,16 @@ class Communicator
 	# Keep track of connected systems
 	#
 	def disconnected(interface)
-		@connected_interfaces.delete(interface)
-		#
-		# Refactor::
-		#	@connected_interfaces to a hash
-		#	The hash contains and array of status hashes that contain the interface as a key
-		#	Delete the key from each of those interfaces 
-		#		
+		@status_lock.synchronize {
+			status_array = @connected_interfaces.delete(interface)
+			status_array.each do |status_hash|
+				status_hash.delete(interface)
+			end
+			#
+			# Refactor required::
+			#	This still isn't perfect as we could be observing modules we are not using...
+			#
+		}	
 	end
 
 
@@ -69,6 +74,7 @@ class Communicator
 			@status_register[mod] ||= {}
 			@status_register[mod][status] ||= {}
 			@status_register[mod][status][interface] = mod_sym
+			@connected_interfaces[interface] << @status_register[mod][status]
 		}
 		
 		mod.add_observer(self)
@@ -111,6 +117,7 @@ class Communicator
 			@status_register[mod] ||= {}
 			@status_register[mod][status] ||= {}
 			@status_register[mod][status].delete(interface)
+			@connected_interfaces[interface].delete(@status_register[mod][status])
 
 			if @status_register[mod][status].empty?
 				mod.delete_observer(self)
@@ -179,7 +186,9 @@ class Communicator
 	
 
 	def attach(interface)
-		@connected_interfaces << interface unless @connected_interfaces.include?(interface)
+		@status_lock.synchronize {
+			@connected_interfaces[interface] = [] unless @connected_interfaces.include?(interface)
+		}
 		return self
 	end
 

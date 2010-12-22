@@ -12,7 +12,8 @@ socket.send( 'some_event', {name: 'ismael', message : 'Hello world'} );
 
 
 var EventsDispatcher = function (url, system_name) {
-	var conn = new WebSocket(url);
+	var conn = null;
+	var the_url = url;
 	var system = system_name;
 	var callbacks = {};
 
@@ -33,6 +34,8 @@ var EventsDispatcher = function (url, system_name) {
 		return this;
 	};
 
+	this.send = send;
+
 	this.bind = function (event_name, callback) {
 		callbacks[event_name] = callbacks[event_name] || [];
 		callbacks[event_name].push(callback);
@@ -42,32 +45,6 @@ var EventsDispatcher = function (url, system_name) {
 
 		return this; // chainable
 	};
-
-	this.send = send;
-
-	// dispatch to the right handlers
-	conn.onmessage = function (evt) {
-		var json = JSON.parse(evt.data);
-		dispatch(json.event, json.data);
-	};
-
-	conn.onclose = function () { dispatch('close', null); }
-	conn.onopen = function () {
-		send("system", [system]);
-
-		dispatch('open', null);
-
-		//
-		// Re-register status events
-		//
-		try {
-			for (event_name in callbacks) {
-				if (event_name != 'close' && event_name != 'open') {
-					send("register", event_name.split('.'));
-				}
-			}
-		} catch (err) { } // Catch any send errors incase we disconnect
-	}
 
 	var dispatch = function (event_name, message) {
 		var chain = callbacks[event_name];
@@ -82,4 +59,36 @@ var EventsDispatcher = function (url, system_name) {
 	//
 	// TODO:: implement unbind!!
 	//
+
+	function setup_connection() {
+		conn = new WebSocket(the_url);
+
+		// dispatch to the right handlers
+		conn.onmessage = function (evt) {
+			var json = JSON.parse(evt.data);
+			dispatch(json.event, json.data);
+		};
+
+		conn.onclose = function () {
+			dispatch('close', null);
+			setup_connection();
+		}
+		conn.onopen = function () {
+			send("system", [system]);
+
+			dispatch('open', null);
+
+			//
+			// Re-register status events
+			//
+			try {
+				for (event_name in callbacks) {
+					if (event_name != 'close' && event_name != 'open') {
+						send("register", event_name.split('.'));
+					}
+				}
+			} catch (err) { } // Catch any send errors incase we disconnect
+		}
+	}
+	setup_connection();
 };
