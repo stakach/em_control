@@ -4,9 +4,12 @@ module Control
 		include Status	# The observable pattern (Should not be called directly)
 		include Constants
 		
-		def initialize
+		def initialize(system)
+			@system = system		
+
 			#
 			# Status variables
+			#	NOTE:: if changed then change in logic.rb 
 			#
 			@status = {}
 			@status_lock = Mutex.new
@@ -28,7 +31,15 @@ module Control
 		end
 		
 
+		def logger
+			@system.logger
+		end
+		
+
 		protected
+		
+
+		attr_reader :system
 
 
 		def send(data, options = {})

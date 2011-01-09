@@ -11,11 +11,27 @@ module Control
 		
 		def initialize(system)
 			@system = system
+			
+			#
+			# Status variables
+			#	NOTE:: if changed then change in device.rb 
+			#
+			@status = {}
+			@status_lock = Mutex.new
+			@status_emit = {}	# status => condition_variable
 		end
+		
+
+		def logger
+			@system.logger
+		end
+
 		
 		protected
 		
+
 		attr_reader :system
+		
 		
 		def register(mod, status, &block)
 			@system.communicator.register(self, mod, status, &block) 

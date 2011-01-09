@@ -1,17 +1,20 @@
 
 #
-# Will reside in user defined file
+# Controls all NEC projectors as of 9/01/2011
 #
 class AllNec < Control::Device
+	include Control::Utilities
 	
-
+	#
+	# Connect and request projector status
+	#
 	def connected
-		p 'connected to projector...'
+		logger.debug 'connected to NEC projector...'
 		send(COMMAND[:status_state], :hex_string => true)
 	end
 
 	def disconnected
-		p 'disconnected from projector...'
+		logger.debug 'disconnected NEC from projector...'
 	end
 	
 
@@ -22,7 +25,7 @@ class AllNec < Control::Device
 		if !COMMAND[m].nil?
 			send(COMMAND[m], :hex_string => true)
 		else
-			raise "invalid command"
+			logger.warn "invalid command sent to AllNec module: #{m}"
 		end
 	end
 
@@ -67,20 +70,23 @@ class AllNec < Control::Device
 		:background_logo => "$03,$B1,$00,$00,$02,$0B,$02,$C3"	# set mute to be the company logo
 	}
 
+
+	#
 	# Return true if command success, nil if still waiting, false if fail
+	#
 	def received(data)
 		case data[1]
 			when 0x00, 0x01
-				p "-- proj sent power command"
+				logger.debug "-- NEC projector sent power command response"
 				return process_power_command(data)
 			when 0x81
-				p "-- proj sent power status command"
+				logger.debug "-- NEC projector sent power status command response"
 				return process_power_status(data)
 			when 0xC0
-				p "-- proj sent working state command"
+				logger.debug "-- NEC projector sent working state command response"
 		end
 		
-		p "-- proj sent unknown response"
+		logger.warn "-- NEC projector sent unknown response :#{byte_to_hex(data)}"
 		return true	# to prevent retries on commands we were not expecting
 	end
 	
@@ -115,14 +121,14 @@ class AllNec < Control::Device
 				self[:lamp_cooling] = false
 				self[:lamp_warming] = true
 	
-				p "lamp warming..."
+				logger.debug "lamp warming..."
 						
 	
 			elsif self[:power_target] == Off
 				self[:lamp_warming] = false
 				self[:lamp_cooling] = true
 				
-				p "lamp cooling..."
+				logger.debug "lamp cooling..."
 			end
 
 			sleep(3)											# pause this thread for 3 seconds
@@ -142,9 +148,9 @@ class AllNec < Control::Device
 				elsif self[:power_target] == Off
 					send(COMMAND[:lamp_off], :hex_string => true)
 				end
-				p "Projector in bad state..."
+				logger.debug "NEC projector in an undesirable power state... (Correcting)"
 			else
-				p "Projector in good state..."
+				logger.debug "NEC projector is in a good power state..."
 			end
 		end
 		
@@ -152,9 +158,19 @@ class AllNec < Control::Device
 	end
 	
 	#
-	# For commands that require a checksum
+	# For commands that require a checksum (volume, zoom)
 	#
 	def send_checksum(command, options = {})
+		#
+		# Prepare command for sending
+		#
+		command = str_to_array(hex_to_byte(command))
+		check = 0
+		data.each do |byte|	# Loop through the first to second last element
+			check = (check + byte) & 0xFF
+		end
+		command << check
+		send(command, options)
 	end
 	
 	def check_checksum(data)

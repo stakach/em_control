@@ -7,6 +7,7 @@ require 'thread'
 require 'monitor'
 
 
+
 #
 # Gems
 #
@@ -14,6 +15,10 @@ require 'rubygems'
 require 'eventmachine'
 require 'active_support'
 require 'active_support/core_ext/string'
+require 'log4r'
+require "log4r/formatter/log4jxmlformatter"
+require "log4r/outputter/udpoutputter"
+
 
 
 #
@@ -31,6 +36,13 @@ require './system.rb'
 
 
 module Control
+
+	DEBUG = 1
+	INFO = 2
+	WARN = 3
+	ERROR = 4
+	FATAL = 5
+
 	class Device
 	
 
@@ -78,6 +90,7 @@ module Control
 				#
 				@parent = Modules.last
 				@parent.setbase(self)
+				@logger = @parent.logger
 				@tls_enabled = Modules.connections[@parent][2]
 			end
 	
@@ -145,11 +158,13 @@ module Control
 			rescue => e
 				#
 				# save from bad user code (ie bad data)
-				#	TODO:: add logger
 				#
 				@critical_lock.unlock			# Just in case
-				p e.message
-				p e.backtrace
+				
+				@logger.error "-- module #{@parent.class} in em_control.rb, send : possible bad data --"
+				@logger.error e.message
+				@logger.error e.backtrace
+				
 				return true
 			end
 	
@@ -171,11 +186,13 @@ module Control
 				
 				begin
 					@parent.initiate_session(@tls_enabled)
-				rescue
+				rescue => e
 					#
 					# save from bad user code (don't want to deplete thread pool)
-					#	TODO:: add logger
 					#
+					@logger.error "-- module #{@parent.class} error whilst calling: initiate_session --"
+					@logger.error e.message
+					@logger.error e.backtrace
 				end
 			end
 			
@@ -225,11 +242,13 @@ module Control
 					EM.defer do
 						begin
 							@parent.disconnected
-						rescue
+						rescue => e
 							#
 							# save from bad user code (don't want to deplete thread pool)
-							#	TODO:: add logger
 							#
+							@logger.error "-- module #{@parent.class} error whilst calling: disconnected --"
+							@logger.error e.message
+							@logger.error e.backtrace
 						end
 					end
 				end
@@ -244,9 +263,15 @@ module Control
 				else
 					@connect_retry += 1
 					#
-					# TODO - log this at least once
-					#	if @connect_retry == 2
+					# log this once if had to retry more than once
 					#
+					if @connect_retry == 2
+						EM.defer do
+							@logger.info "-- module #{@parent.class} in em_control.rb, unbind --"
+							@logger.info "Reconnect failed for #{settings[0]}:#{settings[1]}"
+						end
+					end		
+	
 					EM.add_timer 5, proc { 
 						reconnect settings[0], settings[1]
 					}
@@ -274,10 +299,11 @@ module Control
 				#
 				# save from bad user code (don't want to deplete thread pool)
 				#	This error should be logged in some consistent manner
-				#	TODO:: Create logger
 				#
-				p e.message
-				p e.backtrace
+				@logger.error "-- module #{@parent.class} error whilst calling: received --"
+				@logger.error e.message
+				@logger.error e.backtrace
+				
 				return true
 			end
 	
@@ -303,9 +329,14 @@ module Control
 								@wait_condition.signal		# wake up the thread
 							}
 							#
-							# TODO:: log the event here
+							# log the event here
 							#	EM.defer(proc {log_issue})	# lets not waste time in this thread
 							#
+							notice = "Response was not recieved for command: #{@last_command[:data]}"
+							EM.defer do
+								@logger.warn "-- module #{@parent.class} in em_control.rb, wait_response --"
+								@logger.warn notice
+							end
 						end
 						@wait_condition.wait(@receive_lock)
 					end
@@ -358,10 +389,13 @@ module Control
 							if !error?
 								send_data(data[:data])
 							end
-						rescue
+						rescue => e
 							#
 							# Save the thread in case of bad data in that send
 							#
+							@logger.error "-- module #{@parent.class} in em_control.rb, process_send : possible bad data --"
+							@logger.error e.message
+							@logger.error e.backtrace
 						end
 					}
 				
@@ -387,11 +421,13 @@ module Control
 				EM.defer do
 					begin
 						@parent.connected
-					rescue
+					rescue => e
 						#
 						# save from bad user code (don't want to deplete thread pool)
-						#	TODO:: add logger
 						#
+						@logger.error "-- module #{@parent.class} error whilst calling: connect --"
+						@logger.error e.message
+						@logger.error e.backtrace
 					end
 				end
 			end
@@ -401,18 +437,48 @@ module Control
 	#
 	# Load the config file and start the modules
 	#
+	def self.set_log_level
+		if ARGV[0].nil?
+			@logLevel = INFO
+		else
+			@logLevel = case ARGV[0].downcase.to_sym
+				when :debug
+					DEBUG
+				when :info
+					INFO
+				when :error
+					ERROR
+				else
+					WARN
+			end
+		end
+		
+		#
+		# Console output
+		#
+		console = Log4r::StdoutOutputter.new 'console'
+		console.level = @logLevel
+		
+		#
+		# Chainsaw output (live UDP debugging)
+		#
+		log4jformat = Log4r::Log4jXmlFormatter.new
+		udpout = Log4r::UDPOutputter.new 'udp', {:hostname => "localhost", :port => 8071}
+		udpout.formatter = log4jformat
+	end
+	
 	def self.start
 		EventMachine.run do
 			require 'yaml'
 			settings = YAML::load_file 'settings.yml'
 			settings.each do |name, room|
-				system = System.new(name.to_sym)
+				system = System.new(name.to_sym, @logLevel)
 				room.each do |settings, mod_name|
 					case settings.to_sym
 						when :devices
 							mod_name.each do |key, value|
 								require "./devices/#{key}.rb"
-								device = key.classify.constantize.new
+								device = key.classify.constantize.new(system)
 								system.modules << device
 								ip = nil
 								port = nil
@@ -484,5 +550,5 @@ end
 #
 # Will be controlled in our launch program
 #
-
+Control.set_log_level
 Control.start
