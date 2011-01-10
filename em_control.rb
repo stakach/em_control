@@ -444,12 +444,12 @@ module Control
 			@logLevel = case ARGV[0].downcase.to_sym
 				when :debug
 					DEBUG
-				when :info
-					INFO
+				when :warn
+					WARN
 				when :error
 					ERROR
 				else
-					WARN
+					INFO
 			end
 		end
 		
@@ -465,6 +465,15 @@ module Control
 		log4jformat = Log4r::Log4jXmlFormatter.new
 		udpout = Log4r::UDPOutputter.new 'udp', {:hostname => "localhost", :port => 8071}
 		udpout.formatter = log4jformat
+		
+		#
+		# System level logger
+		#
+		System.logger = Log4r::Logger.new("system")
+		file = Log4r::RollingFileOutputter.new("system", {:maxsize => 4194304, :filename => "system.txt"})	# 4mb file
+		file.level = @logLevel
+			
+		System.logger.add(Log4r::Outputter['console'], Log4r::Outputter['udp'], file)
 	end
 	
 	def self.start

@@ -40,6 +40,7 @@ module Control
 		
 
 		attr_reader :system
+		attr_reader :base
 
 
 		def send(data, options = {})
@@ -60,8 +61,5 @@ module Control
 				}
 			end
 		end
-
-
-		attr_reader :base
 	end
 end

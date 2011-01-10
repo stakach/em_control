@@ -3,6 +3,15 @@ module Control
 	class System
 
 		@@systems = {}
+		@@logger = nil
+		
+		def self.logger
+			@@logger
+		end
+		
+		def self.logger=(log)
+			@@logger = log
+		end
 		
 		def self.systems
 			@@systems

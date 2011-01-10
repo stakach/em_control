@@ -4,6 +4,13 @@ module Control
 		include Observable
 		
 		
+		#
+		# Inform if a method called is missing
+		#
+		def method_missing(m, *args, &block)
+			logger.warn "invalid command sent to module #{self.class}: #{m}"
+		end
+
 
 		def [] (status)
 			@status_lock.synchronize {
@@ -21,7 +28,10 @@ module Control
 					var.broadcast
 				end
 			}
-			changed unless data == old_data
+			if data != old_data
+				changed								# so that the notify is applied
+				logger.debug "#{self.class} status updated: #{status} = #{data}"
+			end
 			notify_observers(self, status, data)	# only notify changes
 		end
 		
