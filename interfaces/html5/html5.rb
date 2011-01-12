@@ -46,24 +46,26 @@ class HTML5Monitor
 	
 	def receive(data)
 		@command_lock.synchronize {
-			p data	# TODO:: remove this
-			
-			data = JSON.parse(data)
-			if @system.nil? && data["command"] == "system"
-				@system = Control::Communicator.select(self, data["data"][0])
+			data = JSON.parse(data, {:symbolize_names => true})
+			if @system.nil? && data[:command] == "system"
+				@system = Control::Communicator.select(self, data[:data][0])
 			else
-				command = data["command"].split('.')
+				command = data[:command].split('.')
 				if command.length == 2
-					@system.send_command(command[0], command[1], data["data"])
+					@system.send_command(command[0], command[1], data[:data])
 				else
 					# Register
 					# Unregister
-					array = data["data"]
+					array = data[:data]
 					array.insert(0, self)
 					@system.public_send(command[0].downcase, *array)
 				end
 			end
 		}
+	rescue => e
+		@system.logger.error "-- in html5.rb, recieve : probably malformed JSON data --"
+		@system.logger.error e.message
+		@system.logger.error e.backtrace
 	end
 	
 	def notify(mod_sym, stat_sym, data)
@@ -82,7 +84,7 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 		#
 		HTML5Monitor.register(socket)
 		id = socket
-		p 'HTML5 Browser connected'
+		System.logger.debug 'HTML5 browser connected'
 		
 		socket.onmessage { |data|
 			#
@@ -90,12 +92,7 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 			#	then process commands
 			#
 			EM.defer do
-				begin
-					HTML5Monitor.receive(id, data)
-				rescue => e
-					p e.message
-					p e.backtrace
-				end
+				HTML5Monitor.receive(id, data)
 			end
 		}
 
@@ -107,4 +104,4 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 
 end
 
-puts 'running HTML5 socket server on port 81'
+Control::System.logger.info 'running HTML5 socket server on port 81'

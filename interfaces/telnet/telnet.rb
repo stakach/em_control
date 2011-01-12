@@ -3,13 +3,14 @@
 
 
 require "#{File.dirname(__FILE__)}/ansi.rb"
+require 'json'
 
 module Control
 	class TelnetServer < Deferred
 
 		def self.start
 			EventMachine::start_server "127.0.0.1", 23, TelnetServer
-			puts 'running telnet server on 23'
+			System.logger.info 'running telnet server on 23'
 		end
  
 		def received
@@ -43,16 +44,23 @@ module Control
 						end
 						send_line " system #{@input} selected...", :green
 					else
-						thecommand = @input.split(' ', 3)
+						thecommand = @input.split(/\s|\./, 3)
 						@input = ""
+						on_fail = lambda {
+							send_line(" invalid command", :green)
+							send_prompt("> ", :green)
+							send_prompt(@input)
+						}
 						if thecommand[0] =~ /register/i
-							@selected.register(self, thecommand[1], thecommand[2]) { send_prompt(" invalid command", :green) }
+							@selected.register(self, thecommand[1], thecommand[2], &on_fail)
 						elsif thecommand[0] =~ /unregister/i
-							@selected.unregister(self, thecommand[1], thecommand[2]) { send_prompt(" invalid command", :green) }
+							@selected.unregister(self, thecommand[1], thecommand[2], &on_fail)
 						elsif thecommand[2].nil?
-							@selected.send_command(thecommand[0], thecommand[1]) { send_prompt(" invalid command", :green) }
+							@selected.send_command(thecommand[0], thecommand[1], &on_fail)
+						elsif ['{','['].include?(thecommand[2][0])
+							@selected.send_command(thecommand[0], thecommand[1], JSON.parse(thecommand[2], {:symbolize_names => true}), &on_fail)
 						else
-							@selected.send_command(thecommand[0], thecommand[1], thecommand[2]) { send_prompt(" invalid command", :green) }
+							@selected.send_command(thecommand[0], thecommand[1], thecommand[2], &on_fail)
 						end
 						send_line " sent...", :green
 					end

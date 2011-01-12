@@ -2,14 +2,6 @@ module Control
 
 	module Status
 		include Observable
-		
-		
-		#
-		# Inform if a method called is missing
-		#
-		def method_missing(m, *args, &block)
-			logger.warn "invalid command sent to module #{self.class}: #{m}"
-		end
 
 
 		def [] (status)

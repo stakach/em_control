@@ -18,6 +18,11 @@ class Communicator
 		@status_register = {}
 		@connected_interfaces = {}
 	end
+	
+
+	def logger
+		@system.logger
+	end
 
 	
 	#
@@ -32,6 +37,7 @@ class Communicator
 	#	Up to interfaces to maintain stability here (They should deal with errors)
 	#
 	def self.select(interface, system)
+		System.logger.debug "-- Interface #{interface.class} selected system #{system}"
 		if system.class == Fixnum
 			
 			return System.systems[System.systems.keys[system]].communicator.attach(interface)
@@ -57,7 +63,8 @@ class Communicator
 			# Refactor required::
 			#	This still isn't perfect as we could be observing modules we are not using...
 			#
-		}	
+		}
+		logger.debug "-- Interface #{interface.class} disconnected"	
 	end
 
 
@@ -78,6 +85,7 @@ class Communicator
 		}
 		
 		mod.add_observer(self)
+		logger.debug "-- Interface #{interface.class} registered #{mod_sym}:#{status}"
 		
 		#
 		# Send the status to this requestor!
@@ -94,16 +102,21 @@ class Communicator
 					end
 				}
 			rescue => e
-				p e.message
-				p e.backtrace
+				logger.error "-- in communicator.rb, register : bad interface or user module code --"
+				logger.error e.message
+				logger.error e.backtrace
 			end
 		end
-	rescue
+	rescue => e
+		logger.warn "-- in communicator.rb, register : #{interface.class} called register on a bad module name --"
+		#logger.warn e.message
+		#logger.warn e.backtrace
 		begin
 			block.call() if !block.nil?	# Block will inform of any errors
-		rescue => e
-			p e.message
-			p e.backtrace
+		rescue => x
+			logger.warn "-- in communicator.rb, register : #{interface.class} provided a bad block --"
+			logger.warn x.message
+			logger.warn x.backtrace
 		end
 	end
 
@@ -112,6 +125,7 @@ class Communicator
 		status = status.to_sym if status.class == String
 		
 		mod = @system.modules[mod_sym]
+		logger.debug "-- Interface #{interface.class} unregistered #{mod_sym}:#{status}"
 
 		@status_lock.synchronize {
 			@status_register[mod] ||= {}
@@ -123,17 +137,20 @@ class Communicator
 				mod.delete_observer(self)
 			end
 		}
-	rescue
+	rescue => e
+		logger.warn "-- in communicator.rb, unregister : #{interface.class} called unregister when it was not needed --"
+		#logger.warn e.message
+		#logger.warn e.backtrace
 		begin
 			block.call() if !block.nil?	# Block will inform of any errors
-		rescue => e
-			p e.message
-			p e.backtrace
+		rescue => x
+			logger.warn "-- in communicator.rb, unregister : #{interface.class} provided a bad block --"
+			logger.warn x.message
+			logger.warn x.backtrace
 		end
 	end
 
 	def update(mod, status, data)
-		p "COM: status update called"
 		@status_lock.synchronize {
 			return if @status_register[mod].nil? || @status_register[mod][status].nil?
 		
@@ -144,42 +161,54 @@ class Communicator
 			@status_register[mod][status].each_pair do |interface, mod|
 				begin
 					function = "#{mod}_#{status}_changed".to_sym
-					if interface.respond_to?(function)
+					if interface.respond_to?(function)				# Can provide a function to deal with status updates
 						interface.__send__(function, data)
 					else
 						interface.notify(mod, status, data)
 					end
 				rescue => e
-					p e.message
-					p e.backtrace
+					logger.error "-- in communicator.rb, update : bad interface or user module code --"
+					logger.error e.message
+					logger.error e.backtrace
 				end
 			end
 		}
 	rescue => e
-		p e.message
-		p e.backtrace
+		logger.error "-- in communicator.rb, update : I hope no one ever sees this --"
+		logger.error e.message
+		logger.error e.backtrace
 	end
 	
 	#
 	# Pass commands to the selected system
 	#
-	def send_command(mod, command, args = [], &block)
+	def send_command(mod, command, *args, &block)
 		#
-		# Accept String, String (argument)
+		# Accept String, argument array
 		#	String
 		#
 		mod = mod.to_sym if mod.class == String
-		p "#{mod} #{command}"
-		begin
-			@command_lock.synchronize {
-				@system.modules[mod].public_send(command, *args)	# Not send string however call function command
-			}
-		rescue
+		logger.debug "-- Command requested #{mod}.#{command}(#{args})"
+		
+		#
+		# Don't keep the interface waiting for the command to complete
+		#
+		EM.defer do
 			begin
-				block.call() if !block.nil?	# Block will inform of any errors
+				@command_lock.synchronize {
+					@system.modules[mod].public_send(command, *args)	# Not send string however call function command
+				}
 			rescue => e
-				p e.message
-				p e.backtrace
+				logger.warn "-- module #{mod} in communicator.rb, send_command : command unavaliable or bad module code --"
+				logger.warn e.message
+				logger.warn e.backtrace
+				begin
+					block.call() if !block.nil?	# Block will inform of any errors
+				rescue => x
+					logger.error "-- in communicator.rb, send_command : interface provided bad block --"
+					logger.error x.message
+					logger.error x.backtrace
+				end
 			end
 		end
 	end

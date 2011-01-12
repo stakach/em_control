@@ -77,7 +77,9 @@ module Control
 				@receive_lock = Mutex.new
 				@send_lock = Mutex.new  # For in sync send and receives when required
 				@critical_lock = Mutex.new
-				@wait_condition = ConditionVariable.new		# for waking and waiting on the revieve data
+				@wait_condition = ConditionVariable.new				# for waking and waiting on the revieve data
+				
+				@connected_condition = ConditionVariable.new		# for maintaining the current queue on disconnect and re-starting
 		
 				@last_command = {}
 				
@@ -108,31 +110,39 @@ module Control
 			#	True if processed on this thread
 			#
 			def send(data, options = {})
-				if !@is_connected
-					return					# do not send when not connected
-				end
+			
+				begin
+					if !@is_connected
+						return					# do not send when not connected
+					end
 					
-				options = @default_send_options.merge(options)
+					options = @default_send_options.merge(options)
 					
-				#
-				# Make sure we are sending appropriately formatted data
-				#
-				if data.class == Array
-					data = array_to_str(data)
-				elsif options[:hex_string] == true
-					data = hex_to_byte(data)
-				end
+					#
+					# Make sure we are sending appropriately formatted data
+					#
+					if data.class == Array
+						data = array_to_str(data)
+					elsif options[:hex_string] == true
+						data = hex_to_byte(data)
+					end
 
-				options[:data] = data
-				options[:retries] = 0 if options[:wait] == false
+					options[:data] = data
+					options[:retries] = 0 if options[:wait] == false
+				rescue => e
+					@logger.error "-- module #{@parent.class} in em_control.rb, send : possible bad data or options hash --"
+					@logger.error e.message
+					@logger.error e.backtrace
+				end
 				
 				
 				#
 				# Use a monitor here to allow for re-entrant locking
 				#	This will allow for a priority queue and then we guarentee order of operations
 				#
+				
 				@critical_lock.lock
-
+				begin
 				if @send_lock.locked?
 					@critical_lock.unlock
 
@@ -152,20 +162,23 @@ module Control
 						process_send			# NOTE::critical lock is released in process send
 					end
 				}
-				@critical_lock.unlock			# NOTE::Locked in process send so requires unlocking here
-				
+				rescue => e
+					#
+					# save from bad user code (ie bad data)
+					#
+					@logger.error "-- module #{@parent.class} in em_control.rb, send : possible bad data --"
+					@logger.error e.message
+					@logger.error e.backtrace
+				end
+				@critical_lock.unlock if @critical_lock.locked?	# NOTE::Locked in process send so requires unlocking here
 				return true
 			rescue => e
 				#
-				# save from bad user code (ie bad data)
+				# Save from a fatal error
 				#
-				@critical_lock.unlock			# Just in case
-				
-				@logger.error "-- module #{@parent.class} in em_control.rb, send : possible bad data --"
+				@logger.error "-- module #{@parent.class} in em_control.rb, send : something went terribly wrong to get here --"
 				@logger.error e.message
 				@logger.error e.backtrace
-				
-				return true
 			end
 	
 	
@@ -219,24 +232,34 @@ module Control
 				@receive_queue.push(data)
 				
 				EM.defer do
-					@receive_lock.synchronize {
-						if @send_lock.locked?
-							begin
-								@timeout.cancel	# incase the timer is not active or nil
-							rescue
-							end
-							@wait_condition.signal		# signal the thread to wakeup
-						else
-							self.process_data
+					@receive_lock.lock
+					if @send_lock.locked?
+						begin
+							@timeout.cancel	# incase the timer is not active or nil
+						rescue
 						end
-					}
+						@wait_condition.signal		# signal the thread to wakeup
+						@receive_lock.unlock
+					else
+						#
+						# requires all the send locks ect to prevent recursive locks
+						#	and avoid any errors
+						#
+						@critical_lock.lock
+						@receive_lock.unlock
+						@send_lock.synchronize {
+							@critical_lock.unlock
+							self.process_data
+						}
+					end
 				end
 			end
 
 
 			def unbind
 				# set offline
-				@is_connected = false				
+				@is_connected = false
+				@parent[:connected] = false
 
 				if @parent.respond_to?(:disconnected)
 					EM.defer do
@@ -332,7 +355,7 @@ module Control
 							# log the event here
 							#	EM.defer(proc {log_issue})	# lets not waste time in this thread
 							#
-							notice = "Response was not recieved for command: #{@last_command[:data]}"
+							notice = "Response was not recieved for command"
 							EM.defer do
 								@logger.warn "-- module #{@parent.class} in em_control.rb, wait_response --"
 								@logger.warn notice
@@ -375,7 +398,13 @@ module Control
 			#
 			def process_send
 				begin
+					
+					if @is_connected == false
+						@connected_condition.wait(@critical_lock)
+					end
+					
 					@critical_lock.unlock
+	
 					if @pri_queue.empty?
 						data = @send_queue.pop(true)
 					else
@@ -415,19 +444,30 @@ module Control
 
 			def call_connected
 				@is_connected = true
+				@parent[:connected] = true
+				
+				@critical_lock.synchronize {
+					@connected_condition.signal		# wake up the thread
+				}
 				
 				return unless @parent.respond_to?(:connected)
 
 				EM.defer do
 					begin
+						@critical_lock.lock
+						@send_lock.lock
+						@critical_lock.unlock
 						@parent.connected
 					rescue => e
 						#
 						# save from bad user code (don't want to deplete thread pool)
 						#
+						@critical_lock.unlock if @critical_lock.locked?
 						@logger.error "-- module #{@parent.class} error whilst calling: connect --"
 						@logger.error e.message
 						@logger.error e.backtrace
+					ensure
+						@send_lock.unlock if @send_lock.locked?
 					end
 				end
 			end
@@ -492,7 +532,7 @@ module Control
 								ip = nil
 								port = nil
 								tls = false
-								p value		# TODO:: Log the command
+								System.logger.info "Loaded device module #{key} : #{value}"
 								value.each do |field, data|
 									case field.to_sym
 										when :names
@@ -519,7 +559,7 @@ module Control
 								require "./controllers/#{key}.rb"
 								control = key.classify.constantize.new(system)
 								system.modules << control
-								p value		# TODO:: Log the command
+								System.logger.info "Loaded control module #{key} : #{value}"
 								value.each do |field, data|
 									case field.to_sym
 										when :names

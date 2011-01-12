@@ -2,6 +2,7 @@ room_123:
   devices:
     all_nec:
       names: [projector1, projector]
-      ip: "10.2.2.48"
+      ip: "172.16.166.238"
       port: 7142
 
+# 10.2.2.48

@@ -19,8 +19,9 @@ module Control
 			begin
 				self.initiate_session
 			rescue => e
-				p e.message
-				p e.backtrace
+				@system.logger.error "-- in defferred.rb, post_init : bad user code in #{self.class}.initiate_session --"
+				@system.logger.error e.message
+				@system.logger.error e.backtrace
 			end
 		end
 		
@@ -30,8 +31,9 @@ module Control
 					begin
 						self.connected
 					rescue => e
-						p e.message
-						p e.backtrace
+						@system.logger.error "-- in defferred.rb, connection_completed : bad user code in #{self.class}.connected --"
+						@system.logger.error e.message
+						@system.logger.error e.backtrace
 					end
 				end
 			end
@@ -49,8 +51,9 @@ module Control
 						self.received
 					}
 				rescue => e
-					p e.message
-					p e.backtrace
+					@system.logger.error "-- in defferred.rb, receive_data : bad user code in #{self.class}.received --"
+					@system.logger.error e.message
+					@system.logger.error e.backtrace
 				end
 			end
 		end
