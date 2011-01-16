@@ -8,6 +8,7 @@ module Control
 	class Logic
 		include Status
 		include Constants
+		include Utilities
 		
 		def initialize(system)
 			@system = system
@@ -41,12 +42,6 @@ module Control
 			@system.communicator.unregister(self, mod, status, &block) 
 		end
 
-		def task callback = nil, &block
-			if callback.nil?
-				EM.defer &block					# Higher performance using blocks?
-			else
-				EM.defer(nil, callback, &block)
-			end
-		end
+		
 	end
 end

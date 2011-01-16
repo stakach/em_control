@@ -3,6 +3,7 @@ module Control
 	class Device
 		include Status	# The observable pattern (Should not be called directly)
 		include Constants
+		include Utilities
 		
 		def initialize(system)
 			@system = system		
@@ -45,17 +46,19 @@ module Control
 
 		def send(data, options = {})
 			inline = @base.send(data, options)
-			if !options[:emit].nil?
+			if !options[:emit].nil? && self[:connected]
 				@status_lock.synchronize {
 					return @status[options[:emit]] if inline == true
 				
 					#
 					# The command is queued - we need to wait for the status to be emited
+					#	TODO:: This will deadlock if we are already in the critical section.
+					#	We need a safety timer to wake this thread up too
 					#
 					if @status_emit[options[:emit]].nil?
 						@status_emit[options[:emit]] = ConditionVariable.new
 					end
-					@status_emit[options[:emit]].wait
+					@status_emit[options[:emit]].wait(@status_lock)
 					
 					return @status[options[:emit]]
 				}

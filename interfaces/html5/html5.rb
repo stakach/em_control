@@ -52,7 +52,7 @@ class HTML5Monitor
 			else
 				command = data[:command].split('.')
 				if command.length == 2
-					@system.send_command(command[0], command[1], data[:data])
+					@system.send_command(command[0], command[1], *data[:data])
 				else
 					# Register
 					# Unregister
@@ -63,9 +63,10 @@ class HTML5Monitor
 			end
 		}
 	rescue => e
-		@system.logger.error "-- in html5.rb, recieve : probably malformed JSON data --"
-		@system.logger.error e.message
-		@system.logger.error e.backtrace
+		logger = @system.nil? ? logger = Control::System.logger : @system.logger
+		logger.error "-- in html5.rb, recieve : probably malformed JSON data --"
+		logger.error e.message
+		logger.error e.backtrace
 	end
 	
 	def notify(mod_sym, stat_sym, data)
@@ -84,7 +85,7 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 		#
 		HTML5Monitor.register(socket)
 		id = socket
-		System.logger.debug 'HTML5 browser connected'
+		Control::System.logger.debug 'HTML5 browser connected'
 		
 		socket.onmessage { |data|
 			#
@@ -98,7 +99,7 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 
 		socket.onclose {
 			HTML5Monitor.unregister(id)
-			p "There are now #{HTML5Monitor.count} HTML5 clients connected"
+			Control::System.logger.info "There are now #{HTML5Monitor.count} HTML5 clients connected"
 		}
 	}
 

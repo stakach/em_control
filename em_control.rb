@@ -171,7 +171,7 @@ module Control
 					@logger.error e.backtrace
 				end
 				@critical_lock.unlock if @critical_lock.locked?	# NOTE::Locked in process send so requires unlocking here
-				return true
+				return true	# return true if this command was completed inline (ie not queued)
 			rescue => e
 				#
 				# Save from a fatal error
@@ -184,6 +184,7 @@ module Control
 	
 			#
 			# Function for user code
+			#	last command protected by send lock
 			#
 			def last_command
 				return str_to_array(@last_command[:data])
@@ -237,13 +238,14 @@ module Control
 						begin
 							@timeout.cancel	# incase the timer is not active or nil
 						rescue
+						ensure
+							@wait_condition.signal		# signal the thread to wakeup
+							@receive_lock.unlock
 						end
-						@wait_condition.signal		# signal the thread to wakeup
-						@receive_lock.unlock
 					else
 						#
 						# requires all the send locks ect to prevent recursive locks
-						#	and avoid any errors
+						#	and avoid any errors (these would have been otherwise set during a send)
 						#
 						@critical_lock.lock
 						@receive_lock.unlock
@@ -259,21 +261,36 @@ module Control
 			def unbind
 				# set offline
 				@is_connected = false
-				@parent[:connected] = false
+				
+				#
+				# This could actually take a bit of time
+				#
+				EM.defer do
+					@parent[:connected] = false
+				end
 
 				if @parent.respond_to?(:disconnected)
-					EM.defer do
-						begin
-							@parent.disconnected
-						rescue => e
-							#
-							# save from bad user code (don't want to deplete thread pool)
-							#
-							@logger.error "-- module #{@parent.class} error whilst calling: disconnected --"
-							@logger.error e.message
-							@logger.error e.backtrace
-						end
-					end
+					#EM.defer do
+						#
+						# Run on reactor thread to ensure immidiate execution
+						#
+						#@critical_lock.synchronize {
+						#	@send_lock.synchronize {
+								begin
+									@parent.disconnected
+								rescue => e
+									#
+									# save from bad user code (don't want to deplete thread pool)
+									#
+									EM.defer do
+										@logger.error "-- module #{@parent.class} error whilst calling: disconnected --"
+										@logger.error e.message
+										@logger.error e.backtrace
+									end
+								end
+						#	}
+						#}
+					#end
 				end
 				
 				# attempt re-connect
@@ -347,18 +364,16 @@ module Control
 			def wait_response
 				@receive_lock.synchronize {
 					if @receive_queue.empty?
-						@timeout = EventMachine::Timer.new(@last_command[:timeout]) do 
+						@timeout = EM::Timer.new(@last_command[:timeout]) do 
 							@receive_lock.synchronize {
 								@wait_condition.signal		# wake up the thread
 							}
 							#
 							# log the event here
-							#	EM.defer(proc {log_issue})	# lets not waste time in this thread
 							#
-							notice = "Response was not recieved for command"
 							EM.defer do
-								@logger.warn "-- module #{@parent.class} in em_control.rb, wait_response --"
-								@logger.warn notice
+								@logger.debug "-- module #{@parent.class} in em_control.rb, wait_response --"
+								@logger.debug "A response was not recieved for the current command"
 							end
 						end
 						@wait_condition.wait(@receive_lock)
@@ -454,20 +469,14 @@ module Control
 
 				EM.defer do
 					begin
-						@critical_lock.lock
-						@send_lock.lock
-						@critical_lock.unlock
 						@parent.connected
 					rescue => e
 						#
 						# save from bad user code (don't want to deplete thread pool)
 						#
-						@critical_lock.unlock if @critical_lock.locked?
 						@logger.error "-- module #{@parent.class} error whilst calling: connect --"
 						@logger.error e.message
 						@logger.error e.backtrace
-					ensure
-						@send_lock.unlock if @send_lock.locked?
 					end
 				end
 			end
@@ -519,7 +528,7 @@ module Control
 	def self.start
 		EventMachine.run do
 			require 'yaml'
-			settings = YAML::load_file 'settings.yml'
+			settings = YAML.load_file 'settings.yml'
 			settings.each do |name, room|
 				system = System.new(name.to_sym, @logLevel)
 				room.each do |settings, mod_name|
@@ -566,10 +575,10 @@ module Control
 											symdata = []
 											data.each {|item|
 												item = item.to_sym
-												system.modules[item] = device
+												system.modules[item] = control
 												symdata << item
 											}
-											system.modules[device] = symdata
+											system.modules[control] = symdata
 									end
 								end
 							end

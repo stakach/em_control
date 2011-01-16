@@ -7,6 +7,12 @@ require 'json'
 
 module Control
 	class TelnetServer < Deferred
+	
+		def initialize(*args)
+			super
+			
+			@input_lock = Mutex.new
+		end
 
 		def self.start
 			EventMachine::start_server "127.0.0.1", 23, TelnetServer
@@ -14,75 +20,80 @@ module Control
 		end
  
 		def received
-			data = @receive_queue.pop(true)		
-
-			if data == "\b"
-				if @input.length > 0
-					send_data " \b"
-					@input.chop!
-				else
-					send_data " "
-				end
-			elsif data =~ /.*\r\n$/
-		
-				#
-				# TODO:: For linux we need to chop! twice here
-				#	Windows @input is already complete
-				#
-
-				if @input =~ /^(quit|exit)$/i 
-					disconnect
-					return
-				end
-
-				if @input != "" && !@input.nil?
-					if @selected.nil?
-						if @input =~ /^\d+$/
-							@selected = Communicator.select(self, @input.to_i)
-						else
-							@selected = Communicator.select(self, @input)
-						end
-						send_line " system #{@input} selected...", :green
+			@input_lock.synchronize {
+				data = @receive_queue.pop(true)		
+				if data == "\b"
+					if @input.length > 0
+						send_data " \b"
+						@input.chop!
 					else
-						thecommand = @input.split(/\s|\./, 3)
-						@input = ""
-						on_fail = lambda {
-							send_line(" invalid command", :green)
-							send_prompt("> ", :green)
-							send_prompt(@input)
-						}
-						if thecommand[0] =~ /register/i
-							@selected.register(self, thecommand[1], thecommand[2], &on_fail)
-						elsif thecommand[0] =~ /unregister/i
-							@selected.unregister(self, thecommand[1], thecommand[2], &on_fail)
-						elsif thecommand[2].nil?
-							@selected.send_command(thecommand[0], thecommand[1], &on_fail)
-						elsif ['{','['].include?(thecommand[2][0])
-							@selected.send_command(thecommand[0], thecommand[1], JSON.parse(thecommand[2], {:symbolize_names => true}), &on_fail)
-						else
-							@selected.send_command(thecommand[0], thecommand[1], thecommand[2], &on_fail)
-						end
-						send_line " sent...", :green
+						send_data " "
 					end
-				end
+				elsif data =~ /.*\r\n$/
+		
+					#
+					# TODO:: For linux we need to chop! twice here
+					#	Windows @input is already complete
+					#
 
-				send_prompt("> ", :green)
-				@input = ""
-			elsif data =~ /^[a-zA-Z0-9\. _-]*$/
-				@input << data
-			end
+					if @input =~ /^(quit|exit)$/i 
+						disconnect
+						return
+					end
+
+					if @input != "" && !@input.nil?
+						if @selected.nil?
+							if @input =~ /^\d+$/
+								@selected = Communicator.select(self, @input.to_i)
+							else
+								@selected = Communicator.select(self, @input)
+							end
+							send_line " system #{@input} selected...", :green
+						else
+							thecommand = @input.split(/\s|\./, 3)
+							@input = ""
+							on_fail = lambda {
+								send_line(" invalid command", :green)
+								send_prompt("> ", :green)
+								send_prompt(@input)
+							}
+							if thecommand[0] =~ /register/i
+								@selected.register(self, thecommand[1], thecommand[2], &on_fail)
+							elsif thecommand[0] =~ /unregister/i
+								@selected.unregister(self, thecommand[1], thecommand[2], &on_fail)
+							elsif thecommand[2].nil?
+								@selected.send_command(thecommand[0], thecommand[1], &on_fail)
+							elsif ['{','['].include?(thecommand[2][0])
+								@selected.send_command(thecommand[0], thecommand[1], JSON.parse(thecommand[2], {:symbolize_names => true}), &on_fail)
+							else
+								@selected.send_command(thecommand[0], thecommand[1], thecommand[2], &on_fail)
+							end
+							send_line " sent...", :green
+						end
+					end
+
+					send_prompt("> ", :green)
+					@input = ""
+				else #if data =~ /^[a-zA-Z0-9\., _-]*$/
+					@input << data
+				end
+			}
 		end
 		
 		def notify(mod_sym, stat_sym, data)
 			send_line("\r\nStatus: #{mod_sym}:#{stat_sym}==#{data}", :green)
 			send_prompt("> ", :green)
-			send(@input) if !@input.empty?
+			@input_lock.synchronize {
+				send(@input) if !@input.empty?
+			}
 		end
 	
 		protected
 	
 		def initiate_session
-			@input = ""
+			@input_lock.synchronize {
+				@input = ""
+			}
 			send_line("Please select from the following systems:", :green)
 			send_line("-----------------------------------------", :green)
 			system = Communicator.system_list

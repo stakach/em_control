@@ -40,6 +40,7 @@ module Control
 		end
 		
 		def [] (mod)
+			mod = mod.to_sym if mod.class == String
 			@modules[mod]
 		end
 

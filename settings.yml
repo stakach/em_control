@@ -2,7 +2,11 @@ room_123:
   devices:
     all_nec:
       names: [projector1, projector]
-      ip: "172.16.166.238"
+      ip: "10.36.249.236"
       port: 7142
+  controllers:
+    simple_system:
+      names: [system, control]
 
-# 10.2.2.48
+# 10.2.2.48 office
+# usyd office 172.16.166.238

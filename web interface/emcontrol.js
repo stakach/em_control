@@ -9,13 +9,15 @@ alert(data.name + ' says: ' + data.message)
 // broadcast events to all connected users
 socket.send( 'some_event', {name: 'ismael', message : 'Hello world'} );
 */
-
+var Off = false;
+var On = true;
 
 var EventsDispatcher = function (url, system_name) {
 	var conn = null;
 	var the_url = url;
 	var system = system_name;
 	var callbacks = {};
+	var disconnected = false;
 
 	var send = function (command_name, arguments) {
 		if (arguments === undefined) {
@@ -70,12 +72,15 @@ var EventsDispatcher = function (url, system_name) {
 		};
 
 		conn.onclose = function () {
-			dispatch('close', null);
+			if (!disconnected) {
+				disconnected = true;
+				dispatch('close', null);
+			}
 			setup_connection();
 		}
 		conn.onopen = function () {
 			send("system", [system]);
-
+			disconnected = false;	// prevent multiple disconnect triggers
 			dispatch('open', null);
 
 			//
