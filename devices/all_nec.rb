@@ -150,6 +150,8 @@ class AllNec < Control::Device
 		vol = 0 if vol < 0
 		command[-2] = vol
 		
+		self[:volume] = vol
+		
 		send_checksum(command)
 	end
 	
@@ -305,6 +307,7 @@ class AllNec < Control::Device
 					#	
 					#	TODO:: process volume control
 					#
+					return true
 				when 0x8A
 					process_projector_information(data)
 					return true
@@ -421,23 +424,22 @@ class AllNec < Control::Device
 	
 	#
 	# NEC has different values for the input status when compared to input selection
-	#	TODO:: array of values corresponding to inputs selected i.e. dvi
 	#
 	INPUT_MAP = {
 		0x01 => {
-			0x01 => :vga,
-			0x02 => :composite,
-			0x03 => :svideo,
+			0x01 => [:vga, :vga1],
+			0x02 => [:composite],
+			0x03 => [:svideo],
 			0x06 => [:dvi, :hdmi],
-			0x07 => :viewer
+			0x07 => [:viewer]
 		},
 		0x02 => {
-			0x01 => :vga2,
-			0x04 => :component2,
-			0x07 => :lan
+			0x01 => [:vga2, :dvi_a, :rgbhv],
+			0x04 => [:component2],
+			0x07 => [:lan]
 		},
 		0x03 => {
-			0x04 => :component
+			0x04 => [:component, :component1]
 		}
 	}
 	def process_input_state(data)
@@ -458,9 +460,9 @@ class AllNec < Control::Device
 		# Notify of bad input selection for debugging
 		#	We ensure at the very least power state and input are always correct
 		#
-		if self[:input_selected] != self[:target_input]
+		if !self[:input_selected].include?(self[:target_input])
 			if self[:target_input].nil?
-				self[:target_input] = self[:input_selected]
+				self[:target_input] = self[:input_selected][0]
 			else
 				switch_to(self[:target_input])
 				logger.debug "-- NEC input state may not be correct, desired: #{self[:target_input]} current: #{self[:input_selected]}"
