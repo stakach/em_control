@@ -52,12 +52,30 @@ module Control
 				
 					#
 					# The command is queued - we need to wait for the status to be emited
-					#	TODO:: This will deadlock if we are already in the critical section.
-					#	We need a safety timer to wake this thread up too
 					#
 					if @status_emit[options[:emit]].nil?
 						@status_emit[options[:emit]] = ConditionVariable.new
 					end
+					
+					@timeout = EM::Timer.new(15) do 
+						@status_lock.synchronize {
+							if @status_emit.has_key?(options[:emit])
+								var = @status_emit.delete(options[:emit])
+								var.broadcast		# wake up the thread
+								
+								@timeout = nil
+								
+								#
+								# log the event here
+								#
+								EM.defer do
+									@logger.debug "-- module #{self.class} in device.rb, send --"
+									@logger.debug "An emit timeout occured"
+								end
+							end
+						}
+					end	
+
 					@status_emit[options[:emit]].wait(@status_lock)
 					
 					return @status[options[:emit]]

@@ -61,8 +61,7 @@ class AllNec < Control::Device
 	#
 	# Connect and request projector status
 	#	NOTE:: Only connected and disconnected are threadsafe
-	#		Usage of instance level variables must be protected with the exception
-	#		of these two functions
+	#		Access of other variables should be protected outside of these functions
 	#
 	def connected
 		#
@@ -83,9 +82,7 @@ class AllNec < Control::Device
 		# Perform any cleanup functions here
 		#	send commands should not be called from here and may cause undesirable results (deadlock)
 		#
-		#	NOTE:: This function is executed on the reactor thread to guareentee 
-		#		completion of execution before the connected callback. Please keep
-		#		code as concise as possible
+		#	
 		#
 		@polling_timer.cancel unless @polling_timer.nil?
 	end
