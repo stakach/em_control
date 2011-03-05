@@ -73,6 +73,8 @@ module Control
 				@send_queue = Queue.new
 				@pri_queue = Queue.new
 				@pri_queue.extend(MonitorMixin)
+				
+				@task_queue = Queue.new	# basically we add tasks here that we want to run in a strict order
 
 				@receive_lock = Mutex.new
 				@send_lock = Mutex.new  # For in sync send and receives when required
@@ -94,6 +96,22 @@ module Control
 				@parent.setbase(self)
 				@logger = @parent.logger
 				@tls_enabled = Modules.connections[@parent][2]
+				
+				#
+				# Task event loop
+				#
+				EM.defer do
+					while true
+						begin
+							task = @task_queue.pop
+							task.call
+						rescue => e
+							@logger.error "-- module #{@parent.class} in em_control.rb, send : error in task loop --"
+							@logger.error e.message
+							@logger.error e.backtrace
+						end
+					end
+				end
 			end
 	
 			attr_reader :is_connected
@@ -113,7 +131,8 @@ module Control
 			
 				begin
 					if !@is_connected
-						return					# do not send when not connected
+						# return true here as we don't want status to wait for a response
+						return true					# do not send when not connected
 					end
 					
 					options = @default_send_options.merge(options)
@@ -261,37 +280,28 @@ module Control
 			def unbind
 				# set offline
 				@is_connected = false
-				
-				#
-				# This could actually take a bit of time
-				#
-				EM.defer do
-					@parent[:connected] = false
-				end
 
-				if @parent.respond_to?(:disconnected)
-					#EM.defer do
+				
+				@task_queue.push lambda {
+					#
+					# Run on reactor thread to ensure immidiate execution
+					#
+					@parent[:connected] = false
+					return unless @parent.respond_to?(:disconnected)
+
+					begin
+						@parent.disconnected
+					rescue => e
 						#
-						# Run on reactor thread to ensure immidiate execution
+						# save from bad user code (don't want to deplete thread pool)
 						#
-						#@critical_lock.synchronize {
-						#	@send_lock.synchronize {
-								begin
-									@parent.disconnected
-								rescue => e
-									#
-									# save from bad user code (don't want to deplete thread pool)
-									#
-									EM.defer do
-										@logger.error "-- module #{@parent.class} error whilst calling: disconnected --"
-										@logger.error e.message
-										@logger.error e.backtrace
-									end
-								end
-						#	}
-						#}
-					#end
-				end
+						EM.defer do
+							@logger.error "-- module #{@parent.class} error whilst calling: disconnected --"
+							@logger.error e.message
+							@logger.error e.backtrace
+						end
+					end
+				}
 				
 				# attempt re-connect
 				#	if !make and break
@@ -459,15 +469,18 @@ module Control
 
 			def call_connected
 				@is_connected = true
-				@parent[:connected] = true
-				
-				@critical_lock.synchronize {
-					@connected_condition.signal		# wake up the thread
-				}
 				
 				return unless @parent.respond_to?(:connected)
 
-				EM.defer do
+				@task_queue.push lambda {
+					@parent[:connected] = true
+				
+					@critical_lock.synchronize {
+						@connected_condition.signal		# wake up the thread
+					}
+					
+					return unless @parent.respond_to?(:connected)
+					
 					begin
 						@parent.connected
 					rescue => e
@@ -478,7 +491,7 @@ module Control
 						@logger.error e.message
 						@logger.error e.backtrace
 					end
-				end
+				}
 			end
 		end
 	end

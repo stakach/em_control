@@ -61,8 +61,7 @@ class AllNec < Control::Device
 	#
 	# Connect and request projector status
 	#	NOTE:: Only connected and disconnected are threadsafe
-	#		Usage of instance level variables must be protected with the exception
-	#		of these two functions
+	#		Access of other variables should be protected outside of these functions
 	#
 	def connected
 		#
@@ -83,9 +82,7 @@ class AllNec < Control::Device
 		# Perform any cleanup functions here
 		#	send commands should not be called from here and may cause undesirable results (deadlock)
 		#
-		#	NOTE:: This function is executed on the reactor thread to guareentee 
-		#		completion of execution before the connected callback. Please keep
-		#		code as concise as possible
+		#	
 		#
 		@polling_timer.cancel unless @polling_timer.nil?
 	end
@@ -150,6 +147,8 @@ class AllNec < Control::Device
 		vol = 0 if vol < 0
 		command[-2] = vol
 		
+		self[:volume] = vol
+		
 		send_checksum(command)
 	end
 	
@@ -205,8 +204,8 @@ class AllNec < Control::Device
 		:component =>	0x10,
 		:component2 =>	0x11,
 		
-		:dvi =>			0x1A,	# \
-		:hdmi =>		0x1A,	# | - These are the same
+		:hdmi =>		0x1A,	# \
+		:dvi =>			0x1A,	# | - These are the same
 		
 		:lan =>			0x20,
 		:viewer =>		0x1F
@@ -305,6 +304,7 @@ class AllNec < Control::Device
 					#	
 					#	TODO:: process volume control
 					#
+					return true
 				when 0x8A
 					process_projector_information(data)
 					return true
@@ -393,9 +393,9 @@ class AllNec < Control::Device
 					#
 					logger.debug "NEC projector in an undesirable power state... (Correcting)"
 					if self[:lamp_target] == On
-						lamp_on
+						lamp(On)
 					elsif self[:lamp_target] == Off
-						lamp_off
+						lamp(Off)
 					end
 					
 					#
@@ -406,6 +406,9 @@ class AllNec < Control::Device
 				end
 			else
 				logger.debug "NEC projector is in a good power state..."
+				
+				self[:lamp_warming] = false
+				self[:lamp_cooling] = false
 
 				#
 				# Ensure the input is in the correct state unless the lamp is off
@@ -421,19 +424,19 @@ class AllNec < Control::Device
 	#
 	INPUT_MAP = {
 		0x01 => {
-			0x01 => :vga,
-			0x02 => :composite,
-			0x03 => :svideo,
-			0x06 => :hdmi,
-			0x07 => :viewer
+			0x01 => [:vga, :vga1],
+			0x02 => [:composite],
+			0x03 => [:svideo],
+			0x06 => [:dvi, :hdmi],
+			0x07 => [:viewer]
 		},
 		0x02 => {
-			0x01 => :vga2,
-			0x04 => :component2,
-			0x07 => :lan
+			0x01 => [:vga2, :dvi_a, :rgbhv],
+			0x04 => [:component2],
+			0x07 => [:lan]
 		},
 		0x03 => {
-			0x04 => :component
+			0x04 => [:component, :component1]
 		}
 	}
 	def process_input_state(data)
@@ -454,11 +457,11 @@ class AllNec < Control::Device
 		# Notify of bad input selection for debugging
 		#	We ensure at the very least power state and input are always correct
 		#
-		if self[:input_selected] != self[:target_input]
+		if !self[:input_selected].include?(self[:target_input])
 			if self[:target_input].nil?
-				self[:target_input] = self[:input_selected]
+				self[:target_input] = self[:input_selected][0]
 			else
-				switch_input(self[:target_input]) 
+				switch_to(self[:target_input])
 				logger.debug "-- NEC input state may not be correct, desired: #{self[:target_input]} current: #{self[:input_selected]}"
 			end
 		end
