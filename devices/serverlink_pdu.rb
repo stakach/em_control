@@ -85,10 +85,10 @@ class ServerlinkPdu < Control::Device
 			string = self[:target_string]
 			string = self[:status_string] if string.nil?
 
-			outlet.each_key do |id|
+			outlet.each do |id, value|	# Value == true or false, id == :outlet_a
 				index = OUTLETS[id]
 				if !index.nil?
-					string[index] = outlet[id] ? "1" : "0"
+					string[index] = value ? "1" : "0"
 				end
 			end
 		
@@ -111,6 +111,7 @@ class ServerlinkPdu < Control::Device
 		
 		if(string != self[:target_string])
 			return false
+		end
 		return true
 	end
 	
