@@ -1,3 +1,6 @@
+require 'rubygems'
+require 'algorithms'
+
 module Control
 	class Device
 	
@@ -22,21 +25,21 @@ module Control
 					:max_waits => 3,
 					:retries => 2,
 					:hex_string => false,
-					:timeout => 5
+					:timeout => 5,
+					:priority => 0
 				}
 
-				@receive_queue = Queue.new
-				@send_queue = Queue.new
-				@pri_queue = Queue.new
-				@pri_queue.extend(MonitorMixin)
-				
-				@task_queue = Queue.new	# basically we add tasks here that we want to run in a strict order
+				@receive_queue = Queue.new	# So we can process responses in different ways
+				@dummy_queue = Queue.new	# === dummy queue
+				@task_queue = Queue.new		# basically we add tasks here that we want to run in a strict order
+				@send_queue = Containers::PriorityQueue.new
+				@send_queue.extend(MonitorMixin)
 
-				@receive_lock = Mutex.new
-				@send_lock = Mutex.new  # For in sync send and receives when required
-				@critical_lock = Mutex.new
-				@wait_condition = ConditionVariable.new				# for waking and waiting on the revieve data
-				
+				@queue_lock = Mutex.new		# Protects @send_queue modifications
+				@receive_lock = Mutex.new	# Recieve data communications
+				@send_lock = Mutex.new		# For in sync send and receives when required
+
+				@wait_condition = ConditionVariable.new			# for waking and waiting on the revieve data
 				@connected_condition = ConditionVariable.new		# for maintaining the current queue on disconnect and re-starting
 		
 				@last_command = {}
@@ -62,7 +65,30 @@ module Control
 							task = @task_queue.pop
 							task.call
 						rescue => e
-							@logger.error "-- module #{@parent.class} in em_control.rb, send : error in task loop --"
+							@logger.error "-- module #{@parent.class} in em_control.rb, base : error in task loop --"
+							@logger.error e.message
+							@logger.error e.backtrace
+						end
+					end
+				end
+				
+				#
+				# Send event loop
+				#
+				EM.defer do
+					while true
+						begin
+							@dummy_queue.pop
+							@queue_lock.synchronize {
+								data = @send_queue.pop
+							}
+							@send_lock.synchronize {
+								@send_queue.synchronize do
+									process_send(data)
+								end
+							}
+						rescue => e
+							@logger.error "-- module #{@parent.class} in em_control.rb, base : error in send loop --"
 							@logger.error e.message
 							@logger.error e.backtrace
 						end
@@ -79,18 +105,16 @@ module Control
 
 
 			#
-			# Using EM Queue which schedules tasks in order
-			#	Returns false if command queued (for execution on another thread)
-			#	True if processed on this thread
+			# Processes sends in strict order
 			#
 			def send(data, options = {})
 			
 				begin
 					if !@is_connected
-						# return true here as we don't want status to wait for a response
-						return true					# do not send when not connected
-					end
-					
+						return true
+					end				
+
+
 					options = @default_send_options.merge(options)
 					
 					#
@@ -108,6 +132,8 @@ module Control
 					@logger.error "-- module #{@parent.class} in em_control.rb, send : possible bad data or options hash --"
 					@logger.error e.message
 					@logger.error e.backtrace
+					
+					return true
 				end
 				
 				
@@ -115,45 +141,32 @@ module Control
 				# Use a monitor here to allow for re-entrant locking
 				#	This will allow for a priority queue and then we guarentee order of operations
 				#
-				
-				@critical_lock.lock
-				begin
-				if @send_lock.locked?
-					@critical_lock.unlock
-
-					if @pri_queue.mon_try_enter		# Does this thread own the send_lock?
-						@pri_queue.push(options)
-						@pri_queue.mon_exit
-					else
-						@send_queue.push(options)	# If not then it must be another thread
-					end
-					return false
-				else
-					@send_queue.push(options)
+				if !options[:emit].nil?
+					@parent.status_lock.lock
 				end
 				
-				@send_lock.synchronize {		# Ensure queue order and queue sizes
-					@pri_queue.synchronize do
-						process_send			# NOTE::critical lock is released in process send
+				@queue_lock.synchronize {
+					if @send_queue.mon_try_enter			# is this the same thread?
+						@send_queue.push(options, 99)		# Prioritise the command
+						@send_queue.mon_exit
+					else
+						@send_queue.push(options, options[:priority])
 					end
 				}
-				rescue => e
-					#
-					# save from bad user code (ie bad data)
-					#
-					@logger.error "-- module #{@parent.class} in em_control.rb, send : possible bad data --"
-					@logger.error e.message
-					@logger.error e.backtrace
-				end
-				@critical_lock.unlock if @critical_lock.locked?	# NOTE::Locked in process send so requires unlocking here
-				return true	# return true if this command was completed inline (ie not queued)
+				@dummy_queue.push(nil)	# informs our send loop that we are ready for it
+				
+				return false
 			rescue => e
 				#
 				# Save from a fatal error
 				#
+				if @parent.status_lock.locked?
+					@parent.status_lock.unlock
+				end
 				@logger.error "-- module #{@parent.class} in em_control.rb, send : something went terribly wrong to get here --"
 				@logger.error e.message
 				@logger.error e.backtrace
+				return true
 			end
 	
 	
@@ -202,36 +215,7 @@ module Control
 					call_connected
 				end
 			end
-
-  
-			def receive_data(data)
-				@receive_queue.push(data)
-				
-				EM.defer do
-					@receive_lock.lock
-					if @send_lock.locked?
-						begin
-							@timeout.cancel	# incase the timer is not active or nil
-						rescue
-						ensure
-							@wait_condition.signal		# signal the thread to wakeup
-							@receive_lock.unlock
-						end
-					else
-						#
-						# requires all the send locks ect to prevent recursive locks
-						#	and avoid any errors (these would have been otherwise set during a send)
-						#
-						@critical_lock.lock
-						@receive_lock.unlock
-						@send_lock.synchronize {
-							@critical_lock.unlock
-							self.process_data
-						}
-					end
-				end
-			end
-
+			
 
 			def unbind
 				# set offline
@@ -283,6 +267,33 @@ module Control
 					}
 				end
 			end
+
+  
+			def receive_data(data)
+				EM.defer do
+					@receive_queue.push(data)
+					
+					@receive_lock.lock
+					if @send_lock.locked? && !@last_command[:emit].nil?	# There could be a bit of a race condition
+						begin
+							@timeout.cancel	# incase the timer is not active or nil
+						rescue
+						ensure
+							@wait_condition.signal		# signal the thread to wakeup
+							@receive_lock.unlock
+						end
+					else
+						#
+						# requires all the send locks ect to prevent recursive locks
+						#	and avoid any errors (these would have been otherwise set during a send)
+						#
+						@receive_lock.unlock
+						@send_lock.synchronize {
+							self.process_data
+						}
+					end
+				end
+			end
 			#
 			# ----------------------------------------------------------------------
 			#
@@ -320,13 +331,72 @@ module Control
 			#
 			#	A return false will always retry the command at the end of the queue
 			#
-			def attempt_retry
-				if @pri_queue.empty? && @last_command[:retries] > 0	# no user defined replacements
-					@last_command[:retries] -= 1
-					@pri_queue.push(@last_command)
+
+			#
+			# Send data
+			#	send_lock is active
+			#	send_queue monitor is active
+			#
+			def process_send(data)
+				if @is_connected == false
+					@connected_condition.wait(@send_lock)
+				end
+				
+				@last_command = data
+
+				EM.schedule proc {	# Send data on the reactor thread
+					begin
+						if !error?
+							send_data(data[:data])
+						end
+					rescue => e
+						#
+						# Save the thread in case of bad data in that send
+						#
+						EM.defer do
+							@logger.error "-- module #{@parent.class} in em_control.rb, process_send : possible bad data --"
+							@logger.error e.message
+							@logger.error e.backtrace
+						end
+					end
+				}
+				
+				#
+				#	Synchronize the response
+				#
+				if data[:wait]
+					process_response
 				end
 			end
 			
+
+			def process_response
+				num_rets = @last_command[:max_waits]
+				begin
+					wait_response
+						
+					if @receive_queue.empty?	# The wait timeout occured - retry command
+						attempt_retry
+						return
+					else					# Process the data
+						response = process_data
+						if response == false
+							attempt_retry
+							return
+						elsif response == true
+							return
+						end
+					end
+
+					#
+					# If we haven't returned before we reach this point then the last data was
+					#	not relavent and we are still waiting (max wait == num_retries * timeout)
+					#
+					num_rets -= 1
+				end while num_rets > 0
+			end
+			
+
 			def wait_response
 				@receive_lock.synchronize {
 					if @receive_queue.empty?
@@ -347,76 +417,11 @@ module Control
 				}
 			end
 			
-			def process_response
-				num_rets = @last_command[:max_waits]
-				begin
-					wait_response
-						
-					if not @receive_queue.empty?
-						response = process_data
-						if response == false
-							attempt_retry
-							return
-						elsif response == true
-							return
-						end
-					else	# the wait timeout occured - retry command
-						attempt_retry
-						return
-					end
-
-					#
-					# If we haven't returned before we reach this point then the last data was
-					#	not relavent and we are still waiting (max wait == num_retries * timeout)
-					#
-					num_rets -= 1
-				end while num_rets > 0
-			end
-
-			#
-			# Send data
-			#	WARN:: Must be called in send_lock critical section
-			#
-			def process_send
-				begin
-					
-					if @is_connected == false
-						@connected_condition.wait(@critical_lock)
-					end
-					
-					@critical_lock.unlock
-	
-					if @pri_queue.empty?
-						data = @send_queue.pop(true)
-					else
-						data = @pri_queue.pop(true)
-					end
-					
-					@last_command = data
-					
-					EM.schedule proc {
-						begin
-							if !error?
-								send_data(data[:data])
-							end
-						rescue => e
-							#
-							# Save the thread in case of bad data in that send
-							#
-							@logger.error "-- module #{@parent.class} in em_control.rb, process_send : possible bad data --"
-							@logger.error e.message
-							@logger.error e.backtrace
-						end
-					}
-				
-					#
-					#	Synchronize the response
-					#
-					if data[:wait]
-							process_response
-					end
-					@critical_lock.lock
-				end while !@send_queue.empty? || !@pri_queue.empty?
+			def attempt_retry
+				if !@send_queue.has_priority?(99) && @last_command[:retries] > 0	# no user defined replacements
+					@last_command[:retries] -= 1
+					@send_queue.push(@last_command, 99)
+				end
 			end
 			
 
@@ -431,7 +436,7 @@ module Control
 				@task_queue.push lambda {
 					@parent[:connected] = true
 				
-					@critical_lock.synchronize {
+					@send_lock.synchronize {
 						@connected_condition.signal		# wake up the thread
 					}
 					

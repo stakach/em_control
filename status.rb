@@ -16,13 +16,14 @@ module Control
 				old_data = @status[status]
 				@status[status] = data
 				if @status_emit.has_key?(status)
+					var = @status_emit.delete(status)
+					
 					begin
-						@timeout.cancel() unless @timeout.nil?
-						@timeout = nil
+						var[1].cancel()
 					rescue
 					end
-					var = @status_emit.delete(status)
-					var.broadcast
+					
+					var[0].broadcast
 				end
 			}
 			if data != old_data

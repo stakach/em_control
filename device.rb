@@ -42,44 +42,51 @@ module Control
 
 		attr_reader :system
 		attr_reader :base
+		
+		#
+		# required by base for send logic
+		#
+		attr_reader :status_lock
 
 
 		def send(data, options = {})
-			inline = @base.send(data, options)
-			if !options[:emit].nil? && self[:connected]
-				@status_lock.synchronize {
-					return @status[options[:emit]] if inline == true
+			error = @base.send(data, options)
+			
+			if !options[:emit].nil?
+				return @status[options[:emit]] if error == true
 				
-					#
-					# The command is queued - we need to wait for the status to be emited
-					#
-					if @status_emit[options[:emit]].nil?
-						@status_emit[options[:emit]] = ConditionVariable.new
-					end
+				#
+				# The command is queued - we need to wait for the status to be emited
+				#
+				if @status_emit[options[:emit]].nil?
+					@status_emit[options[:emit]] = [ConditionVariable.new]
+				end
 					
-					@timeout = EM::Timer.new(15) do 
-						@status_lock.synchronize {
-							if @status_emit.has_key?(options[:emit])
-								var = @status_emit.delete(options[:emit])
-								var.broadcast		# wake up the thread
+				@status_emit[options[:emit]] << EM::Timer.new(15) do 
+					@status_lock.synchronize {
+						if @status_emit.has_key?(options[:emit])
+							var = @status_emit.delete(options[:emit])
+							var[0].broadcast		# wake up the thread
 								
-								@timeout = nil
-								
-								#
-								# log the event here
-								#
-								EM.defer do
-									@logger.debug "-- module #{self.class} in device.rb, send --"
-									@logger.debug "An emit timeout occured"
-								end
+							#
+							# log the event here
+							#
+							EM.defer do
+								@logger.debug "-- module #{self.class} in device.rb, send --"
+								@logger.debug "An emit timeout occured"
 							end
-						}
-					end	
+						end
+					}
+				end	
 
-					@status_emit[options[:emit]].wait(@status_lock)
+				@status_emit[options[:emit]].wait(@status_lock)
 					
-					return @status[options[:emit]]
-				}
+				return @status[options[:emit]]
+				
+				#
+				# Locked in send if emit is set
+				#
+				@status_lock.unlock
 			end
 		end
 	end
