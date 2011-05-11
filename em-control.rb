@@ -31,6 +31,8 @@ require File.dirname(__FILE__) + '/control/core/logic.rb'
 require File.dirname(__FILE__) + '/control/interfaces/communicator.rb'
 require File.dirname(__FILE__) + '/control/interfaces/deferred.rb'
 require File.dirname(__FILE__) + '/control/core/system.rb'
+require File.dirname(__FILE__) + '/control/core/device_connection.rb'
+require File.dirname(__FILE__) + '/control/core/udp_server.rb'
 require File.dirname(__FILE__) + '/control/core/control_base.rb'
 
 
@@ -89,9 +91,14 @@ module Control
 	
 	def self.start
 		EventMachine.run do
-			#require 'yaml'
-			#settings = YAML.load_file 'settings.yml'
-			
+			#
+			# Start the UDP server
+			#
+			EM.open_datagram_socket "127.0.0.1", 0, UdpServer
+
+			#
+			# Load the system based on the database
+			#
 			Scheme.all.each do |scheme|
 				System.new(scheme, @logLevel)
 			end

@@ -86,7 +86,15 @@ module Control
 				else
 					#
 					# Load UDP device here
+					#	Create UDP base
+					#	Add device to server
+					#	Call connected
 					#
+					devBase = UdpBase.new
+					$theUdpServer.add_device(schemeDevice, devBase)
+					EM.defer do
+						devBase.call_connected
+					end
 				end
 			}
 		end
