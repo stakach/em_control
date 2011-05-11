@@ -1,0 +1,10 @@
+ INFO system: running telnet server on 23
+ INFO system: running HTML5 socket server on port 81
+ INFO system: running telnet server on 23
+ INFO system: running HTML5 socket server on port 81
+ INFO system: running telnet server on 23
+ INFO system: running HTML5 socket server on port 81
+ INFO system: running telnet server on 23
+ INFO system: running HTML5 socket server on port 81
+ INFO system: running telnet server on 23
+ INFO system: running HTML5 socket server on port 81
