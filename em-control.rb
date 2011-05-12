@@ -83,7 +83,7 @@ module Control
 		# System level logger
 		#
 		System.logger = Log4r::Logger.new("system")
-		file = Log4r::RollingFileOutputter.new("system", {:maxsize => 4194304, :filename => "#{ROOT_DIR}/interface/log/system.txt"})	# 4mb file
+		file = Log4r::RollingFileOutputter.new("system", {:maxsize => 4194304, :filename => "#{ROOT_DIR}/interface/log/system.log"})	# 4mb file
 		file.level = @logLevel
 			
 		System.logger.add(Log4r::Outputter['console'], Log4r::Outputter['udp'], file)

@@ -66,6 +66,7 @@ module Control
 			# Send event loop
 			#
 			EM.defer do
+				data = nil
 				while true
 					begin
 						@dummy_queue.pop
@@ -200,29 +201,27 @@ module Control
 			}
 		end
 		
-		def receive_data(data)
-			EM.defer do
-				@receive_queue.push(data)
+		def do_receive_data(data)
+			@receive_queue.push(data)
 					
-				@receive_lock.lock
-				if @send_lock.locked? && !@last_command[:emit].nil?	# There could be a bit of a race condition
-					begin
-						@timeout.cancel	# incase the timer is not active or nil
-					rescue
-					ensure
-						@wait_condition.signal		# signal the thread to wakeup
-						@receive_lock.unlock
-					end
-				else
-					#
-					# requires all the send locks ect to prevent recursive locks
-					#	and avoid any errors (these would have been otherwise set during a send)
-					#
+			@receive_lock.lock
+			if @send_lock.locked?
+				begin
+					@timeout.cancel	# incase the timer is not active or nil
+				rescue
+				ensure
+					@wait_condition.signal		# signal the thread to wakeup
 					@receive_lock.unlock
-					@send_lock.synchronize {
-						self.process_data
-					}
 				end
+			else
+				#
+				# requires all the send locks ect to prevent recursive locks
+				#	and avoid any errors (these would have been otherwise set during a send)
+				#
+				@receive_lock.unlock
+				@send_lock.synchronize {
+					self.process_data
+				}
 			end
 		end
 		
@@ -266,6 +265,8 @@ module Control
 			if @is_connected == false
 				@status_lock.unlock
 				@connected_condition.wait(@send_lock)
+			else
+				@status_lock.unlock
 			end
 				
 			@status_lock.synchronize {

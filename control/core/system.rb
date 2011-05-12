@@ -15,7 +15,7 @@ module Control
 				@log_level = log_level
 		
 				@logger = Log4r::Logger.new("#{scheme.name}")
-				file = Log4r::RollingFileOutputter.new(scheme.name, {:maxsize => 4194304, :filename => "#{ROOT_DIR}/interface/log/#{scheme.name}.txt"})	# 4mb file
+				file = Log4r::RollingFileOutputter.new(scheme.name, {:maxsize => 4194304, :filename => "#{ROOT_DIR}/interface/log/#{scheme.name}.log"})	# 4mb file
 				file.level = log_level
 				@logger.add(Log4r::Outputter['console'], Log4r::Outputter['udp'], file)	# common console output for all venues
 

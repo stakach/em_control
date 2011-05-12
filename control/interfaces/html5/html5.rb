@@ -12,22 +12,31 @@ require 'json'
 
 class HTML5Monitor
 	@@clients = {}
+	@@client_lock = Mutex.new
 
 	def self.register(socket)
-		@@clients[socket] = HTML5Monitor.new(socket)
+		@@client_lock.synchronize {
+			@@clients[socket] = HTML5Monitor.new(socket)
+		}
 	end
 	
 	def self.unregister(id)
-		client = @@clients.delete(id)
-		client.disconnected
+		@@client_lock.synchronize {
+			client = @@clients.delete(id)
+			client.disconnected
+		}
 	end
 	
 	def self.count
-		@@clients.length
+		@@client_lock.synchronize {
+			return @@clients.length
+		}
 	end
 	
 	def self.receive(id, data)
-		@@clients[id].receive(data)
+		@@client_lock.synchronize {
+			@@clients[id].receive(data)
+		}
 	end
 
 
@@ -37,7 +46,6 @@ class HTML5Monitor
 	def initialize(socket)
 		@socket = socket
 		@system = nil
-		@command_lock = Mutex.new
 	end
 	
 	def disconnected
@@ -45,23 +53,21 @@ class HTML5Monitor
 	end
 	
 	def receive(data)
-		@command_lock.synchronize {
-			data = JSON.parse(data, {:symbolize_names => true})
-			if @system.nil? && data[:command] == "system"
-				@system = Control::Communicator.select(self, data[:data][0])
+		data = JSON.parse(data, {:symbolize_names => true})
+		if @system.nil? && data[:command] == "system"
+			@system = Control::Communicator.select(self, data[:data][0])
+		else
+			command = data[:command].split('.')
+			if command.length == 2
+				@system.send_command(command[0], command[1], *data[:data])
 			else
-				command = data[:command].split('.')
-				if command.length == 2
-					@system.send_command(command[0], command[1], *data[:data])
-				else
-					# Register
-					# Unregister
-					array = data[:data]
-					array.insert(0, self)
-					@system.public_send(command[0].downcase, *array)
-				end
+				# Register
+				# Unregister
+				array = data[:data]
+				array.insert(0, self)
+				@system.public_send(command[0].downcase, *array)
 			end
-		}
+		end
 	rescue => e
 		logger = @system.nil? ? logger = Control::System.logger : @system.logger
 		logger.error "-- in html5.rb, recieve : probably malformed JSON data --"
@@ -83,9 +89,13 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 		# Setup status variable here :)
 		#	We could use a 
 		#
-		HTML5Monitor.register(socket)
-		id = socket
-		Control::System.logger.debug 'HTML5 browser connected'
+		id = nil
+		
+		EM.defer do
+			HTML5Monitor.register(socket)
+			id = socket
+			Control::System.logger.debug 'HTML5 browser connected'
+		end
 		
 		socket.onmessage { |data|
 			#
@@ -98,8 +108,10 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 		}
 
 		socket.onclose {
-			HTML5Monitor.unregister(id)
-			Control::System.logger.info "There are now #{HTML5Monitor.count} HTML5 clients connected"
+			EM.defer do
+				HTML5Monitor.unregister(id)
+				Control::System.logger.info "There are now #{HTML5Monitor.count} HTML5 clients connected"
+			end
 		}
 	}
 

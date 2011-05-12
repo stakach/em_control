@@ -15,6 +15,10 @@ module Control
 		def initialize *args
 			super
 			
+			if !$theUdpServer.nil?
+				return
+			end
+			
 			$theUdpServer = self
 			@data_lock = Mutex.new
 			@devices = {}
@@ -35,11 +39,16 @@ module Control
 			#	Differenciate by inspecting the size
 			#
 			ip = get_peername[2,6].unpack "nC4"
-			begin
-				@data_lock.synchronize {
-					@devices["#{ip[1..-1].join(".")}:#{ip[0]}"].receive_data(data)
-				}
-			rescue
+			EM.defer do
+				begin
+					@data_lock.synchronize {
+						@devices["#{ip[1..-1].join(".")}:#{ip[0]}"].do_receive_data(data)
+					}
+				rescue
+					#
+					# TODO:: add error messages
+					#
+				end
 			end
 		end
 		
@@ -53,15 +62,19 @@ module Control
 		end
 
 		def add_device(scheme, device)
-			@data_lock.synchronize {
-				@devices["#{scheme.ip}:#{scheme.port}"] = device
-			}
+			EM.defer do
+				@data_lock.synchronize {
+					@devices["#{scheme.ip}:#{scheme.port}"] = device
+				}
+			end
 		end
 		
 		def remove_device(scheme)
-			@data_lock.synchronize {
-				@devices.delete("#{scheme.ip}:#{scheme.port}")
-			}
+			EM.defer do
+				@data_lock.synchronize {
+					@devices.delete("#{scheme.ip}:#{scheme.port}")
+				}
+			end
 		end
 	end
 

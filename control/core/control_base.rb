@@ -113,8 +113,14 @@ module Control
 				end
 			end
 			
+			def receive_data(data)
+				EM.defer do
+					do_receive_data(data)
+				end
+			end
+			
 			def do_send_data(data)
-				send_data(data[:data])
+				send_data(data)
 			end
 		end
 	end
