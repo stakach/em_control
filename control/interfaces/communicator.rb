@@ -38,13 +38,9 @@ class Communicator
 	#
 	def self.select(interface, system)
 		System.logger.debug "-- Interface #{interface.class} selected system #{system}"
-		if system.class == Fixnum
-			
-			return System.systems[System.systems.keys[system]].communicator.attach(interface)
-		else
-			system = system.to_sym if system.class == String
-			return System.systems[system].communicator.attach(interface)
-		end
+		system = system.to_sym if system.class == String
+		return nil if System.systems[system].nil?
+		return System.systems[system].communicator.attach(interface)
 	end
 
 
@@ -60,7 +56,7 @@ class Communicator
 				status_hash.delete(interface)
 			end
 			#
-			# Refactor required::
+			# TODO::Refactor required
 			#	This still isn't perfect as we could be observing modules we are not using...
 			#
 		}
@@ -75,7 +71,7 @@ class Communicator
 		mod_sym = mod.class == String ? mod.to_sym : mod	# remember the symbol used by the interface to reference this module
 		status = status.to_sym if status.class == String
 		
-		mod = @system.modules[mod_sym]
+		mod = @system.modules[mod_sym]	# most efficient
 
 		@status_lock.synchronize {
 			@status_register[mod] ||= {}
@@ -112,7 +108,7 @@ class Communicator
 		#logger.warn e.message
 		#logger.warn e.backtrace
 		begin
-			block.call() if !block.nil?	# Block will inform of any errors
+			block.call() unless block.nil?	# Block will inform of any errors
 		rescue => x
 			logger.warn "-- in communicator.rb, register : #{interface.class} provided a bad block --"
 			logger.warn x.message
@@ -203,7 +199,7 @@ class Communicator
 				logger.warn e.message
 				logger.warn e.backtrace
 				begin
-					block.call() if !block.nil?	# Block will inform of any errors
+					block.call() unless block.nil?	# Block will inform of any errors
 				rescue => x
 					logger.error "-- in communicator.rb, send_command : interface provided bad block --"
 					logger.error x.message

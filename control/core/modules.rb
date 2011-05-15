@@ -77,7 +77,7 @@ module Control
 			if Modules[schemeDevice.dependency.id].nil?
 				Modules.load_module(schemeDevice.dependency)		# This is the re-load code function (live bug fixing - removing functions does not work)
 			end
-			@instance = Modules[schemeDevice.dependency.id].new(System.systems[schemeDevice.scheme_id])
+			@instance = Modules[schemeDevice.dependency.id].new(System.schemes[schemeDevice.scheme_id])
 			@@lookup[@instance] = schemeDevice
 			Modules.load_lock.synchronize {		# TODO::dangerous (locking on reactor thread)
 				Modules.loading = @instance
@@ -126,7 +126,7 @@ module Control
 			if Modules[schemeDevice.dependency.id].nil?
 				Modules.load_module(schemeDevice.dependency)		# This is the re-load code function (live bug fixing - removing functions does not work)
 			end
-			@instance = Modules[schemeDevice.dependency.id].new(System.systems[schemeDevice.scheme_id])
+			@instance = Modules[schemeDevice.dependency.id].new(System.schemes[schemeDevice.scheme_id])
 		end
 	end
 end

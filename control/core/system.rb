@@ -65,9 +65,13 @@ module Control
 		def self.logger=(log)
 			@@logger = log
 		end
+		
+		def self.schemes
+			@@schemes
+		end
 	
 		def self.systems
-			@@schemes
+			@@systems
 		end
 		
 		def self.[] (system)
