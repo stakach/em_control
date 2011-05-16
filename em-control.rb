@@ -32,7 +32,7 @@ require File.dirname(__FILE__) + '/control/interfaces/communicator.rb'
 require File.dirname(__FILE__) + '/control/interfaces/deferred.rb'
 require File.dirname(__FILE__) + '/control/core/system.rb'
 require File.dirname(__FILE__) + '/control/core/device_connection.rb'
-require File.dirname(__FILE__) + '/control/core/udp_server.rb'
+require File.dirname(__FILE__) + '/control/core/datagram_server.rb'
 require File.dirname(__FILE__) + '/control/core/control_base.rb'
 
 
@@ -94,7 +94,7 @@ module Control
 			#
 			# Start the UDP server
 			#
-			EM.open_datagram_socket "127.0.0.1", 0, UdpServer
+			EM.open_datagram_socket "127.0.0.1", 0, DatagramServer
 
 			#
 			# Load the system based on the database

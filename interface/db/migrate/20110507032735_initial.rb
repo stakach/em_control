@@ -27,6 +27,10 @@ class Initial < ActiveRecord::Migration
 			t.boolean	:tls,	:default => false,	:allow_null => false
 			t.boolean	:udp,	:default => false,	:allow_null => false
 			
+			t.text	:cert,				:allow_null => false	# cert file or text whatever
+			t.string	:username
+			t.string	:password
+			
 			t.integer		:priority,	:default => 0
 		end
 

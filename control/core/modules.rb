@@ -90,8 +90,8 @@ module Control
 					#	Add device to server
 					#	Call connected
 					#
-					devBase = UdpBase.new
-					$theUdpServer.add_device(schemeDevice, devBase)
+					devBase = DatagramBase.new
+					$datagramServer.add_device(schemeDevice, devBase)
 					EM.defer do
 						devBase.call_connected
 					end

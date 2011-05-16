@@ -41,7 +41,7 @@ module Control
 			
 
 			def ssl_handshake_completed
-				call_connected				# this will mark the true connection complete stage for encrypted devices
+				call_connected(get_peer_cert)		# this will mark the true connection complete stage for encrypted devices
 			end
 
 	

@@ -43,6 +43,10 @@ module Control
 		attr_reader :system
 		attr_reader :base
 		
+		def settings
+			DeviceModule.lookup[self]
+		end
+		
 		#
 		# required by base for send logic
 		#
