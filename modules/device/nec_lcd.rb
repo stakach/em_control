@@ -17,13 +17,14 @@ class NecLcd < Control::Device
 	
 	def connected
 		power_on_delay
-		power_indicator
+		power_status
 		video_input
 		audio_input
 		volume_status
 		brightness_status
 		contrast_status
 		mute_status
+		#volume(99)
 	end
 	
 
@@ -110,10 +111,10 @@ class NecLcd < Control::Device
 		message = OPERATION_CODE[:volume_status]
 		message += val.to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
-		send_checksum(command)
+		send_checksum(type, message)
 	end
 	
-	def brightness(val)		
+	def brightness(val)
 		val = 100 if val > 100
 		val = 0 if val < 0
 		
@@ -123,7 +124,7 @@ class NecLcd < Control::Device
 		message = OPERATION_CODE[:brightness_status]
 		message += val.to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
-		send_checksum(command)
+		send_checksum(type, message)
 	end
 	
 	def contrast(val)		
@@ -136,7 +137,7 @@ class NecLcd < Control::Device
 		message = OPERATION_CODE[:contrast_status]
 		message += val.to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
-		send_checksum(command)
+		send_checksum(type, message)
 	end
 	
 	def mute
@@ -190,6 +191,8 @@ class NecLcd < Control::Device
 						logger.info "-- NEC LCD, response was: #{data}"
 						return false	# command failed
 					end
+				else
+					parse_response(data)
 				end
 			when :get_parameter_reply, :set_parameter_reply
 				if data[8..9] == "00"
@@ -237,14 +240,14 @@ class NecLcd < Control::Device
 			when "008D" #OPERATION_CODE[:mute_status]
 				self[:audio_mute] = value == 1
 				
-			when "02BE" #OPERATION_CODE[:power_indicator]
+			when "00D6" #OPERATION_CODE[:power_status] (This is a special value 01D6 == 00D6 on response)
 				self[:power] = value == 1
 				
 			when "02D8" #OPERATION_CODE[:power_on_delay]
 				self[:warming_remaining] = value
 				if value > 0
 					self[:warming] = true
-					sleep(1)
+					sleep(2)
 					power_on_delay
 				else
 					self[:warming] = false
@@ -272,7 +275,7 @@ class NecLcd < Control::Device
 		:audio_input => '022E',
 		:volume_status => '0062',
 		:mute_status => '008D',
-		:power_indicator => '02BE',
+		:power_status => '01D6', #'02BE',
 		:power_on_delay => '02D8',
 		:contrast_status => '0012',
 		:brightness_status => '0010'
@@ -285,6 +288,7 @@ class NecLcd < Control::Device
 	OPERATION_CODE.each_key do |command|
 		define_method command do
 			type = :get_parameter
+			type = :command if command == :power_status
 			message = OPERATION_CODE[command]
 			send_checksum(type, message)
 		end
