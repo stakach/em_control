@@ -43,7 +43,14 @@ module Control
 		attr_reader :system
 		attr_reader :base
 		
-		def settings
+		#
+		# Configuration and settings
+		#
+		def config
+			DeviceModule.lookup[self]
+		end
+		
+		def setting(name)
 			DeviceModule.lookup[self]
 		end
 		

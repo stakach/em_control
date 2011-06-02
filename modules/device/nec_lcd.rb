@@ -8,6 +8,10 @@ class NecLcd < Control::Device
 		#
 		self[:volume_min] = 0
 		self[:volume_max] = 100
+		self[:brightness_min] = 0
+		self[:brightness_max] = 100
+		self[:contrast_min] = 0
+		self[:contrast_max] = 100
 		#self[:error] = []		TODO!!
 	end
 	
@@ -17,6 +21,8 @@ class NecLcd < Control::Device
 		video_input
 		audio_input
 		volume_status
+		brightness_status
+		contrast_status
 		mute_status
 	end
 	
@@ -63,7 +69,7 @@ class NecLcd < Control::Device
 		logger.debug "-- NEC LCD, requested to switch to: #{input}"
 		
 		type = :set_parameter
-		message = operation_code[:video_input]
+		message = OPERATION_CODE[:video_input]
 		message += INPUTS[input].to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
 		send_checksum(type, message)
@@ -84,7 +90,7 @@ class NecLcd < Control::Device
 		logger.debug "-- NEC LCD, requested to switch audio to: #{input}"
 		
 		type = :set_parameter
-		message = operation_code[:audio_input]
+		message = OPERATION_CODE[:audio_input]
 		message += AUDIO[input].to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
 		send_checksum(type, message)
@@ -94,15 +100,41 @@ class NecLcd < Control::Device
 	#
 	# Volume Modification
 	#
-	def volume(vol)		
-		vol = 100 if vol > 100
-		vol = 0 if vol < 0
+	def volume(val)		
+		val = 100 if val > 100
+		val = 0 if val < 0
 		
-		logger.debug "-- NEC LCD, requested to change volume to: #{vol}"
+		logger.debug "-- NEC LCD, requested to change volume to: #{val}"
 		
 		type = :set_parameter
-		message = operation_code[:volume_status]
-		message += vol.to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
+		message = OPERATION_CODE[:volume_status]
+		message += val.to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
+		
+		send_checksum(command)
+	end
+	
+	def brightness(val)		
+		val = 100 if val > 100
+		val = 0 if val < 0
+		
+		logger.debug "-- NEC LCD, requested to change brightness to: #{val}"
+		
+		type = :set_parameter
+		message = OPERATION_CODE[:brightness_status]
+		message += val.to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
+		
+		send_checksum(command)
+	end
+	
+	def contrast(val)		
+		val = 100 if val > 100
+		val = 0 if val < 0
+		
+		logger.debug "-- NEC LCD, requested to change contrast to: #{val}"
+		
+		type = :set_parameter
+		message = OPERATION_CODE[:contrast_status]
+		message += val.to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
 		send_checksum(command)
 	end
@@ -111,7 +143,7 @@ class NecLcd < Control::Device
 		logger.debug "-- NEC LCD, requested to mute audio"
 		
 		type = :set_parameter
-		message = operation_code[:mute_status]
+		message = OPERATION_CODE[:mute_status]
 		message += "0001"	# Value of input as a hex string
 		
 		send_checksum(type, message)
@@ -121,7 +153,7 @@ class NecLcd < Control::Device
 		logger.debug "-- NEC LCD, requested to unmute audio"
 		
 		type = :set_parameter
-		message = operation_code[:mute_status]
+		message = OPERATION_CODE[:mute_status]
 		message += "0000"	# Value of input as a hex string
 		
 		send_checksum(type, message)
@@ -133,13 +165,14 @@ class NecLcd < Control::Device
 		# Check for valid response
 		#
 		if !check_checksum(data)
-			logger.debug "-- NEC LCD, checksum failed for command: 0x#{byte_to_hex(array_to_str(last_command))}"
+			logger.debug "-- NEC LCD, checksum failed for command: #{array_to_str(last_command)}"
+			logger.info "-- NEC LCD, response was: #{array_to_str(data)}"
 			return false
 		end
 		
 		data = array_to_str(data)	# Convert bytes to a string
 		
-		case msg_type[data[4]]	# Check the msg_type (B, D or F)
+		case MSG_TYPE[data[4]]	# Check the MSG_TYPE (B, D or F)
 			when :command_reply
 				#
 				# Power on and off
@@ -153,6 +186,8 @@ class NecLcd < Control::Device
 						end
 						return true
 					else
+						logger.debug "-- NEC LCD, command failed: #{array_to_str(last_command)}"
+						logger.info "-- NEC LCD, response was: #{data}"
 						return false	# command failed
 					end
 				end
@@ -160,6 +195,8 @@ class NecLcd < Control::Device
 				if data[8..9] == "00"
 					parse_response(data)
 				else
+					logger.debug "-- NEC LCD, get or set failed: #{array_to_str(last_command)}"
+					logger.info "-- NEC LCD, response was: #{data}"
 					return false
 				end
 		end
@@ -178,26 +215,32 @@ class NecLcd < Control::Device
 		value = data[20..23].to_i(16)
 
 		case data[10..13]
-			when operation_code[:video_input]
+			when "0060" #OPERATION_CODE[:video_input]
 				self[:input] = INPUTS.invert[value]
 				self[:target_input] = self[:input] if self[:target_input].nil?
 				switch_to(self[:target_input]) unless self[:input] == self[:target_input]
 				
-			when operation_code[:audio_input]
+			when "022E" #OPERATION_CODE[:audio_input]
 				self[:audio] = AUDIO.invert[value]
 				self[:target_audio] = self[:audio] if self[:target_audio].nil?
 				switch_audio(self[:target_audio]) unless self[:audio] == self[:target_audio]
 				
-			when operation_code[:volume_status]
+			when "0062" #OPERATION_CODE[:volume_status]
 				self[:volume] = value
 				
-			when operation_code[:mute_status]
+			when "0010" #OPERATION_CODE[:brightness_status]
+				self[:brightness] = value
+				
+			when "0012" #OPERATION_CODE[:contrast_status]
+				self[:contrast] = value
+				
+			when "008D" #OPERATION_CODE[:mute_status]
 				self[:audio_mute] = value == 1
 				
-			when operation_code[:power_indicator]
+			when "02BE" #OPERATION_CODE[:power_indicator]
 				self[:power] = value == 1
 				
-			when operation_code[:power_on_delay]
+			when "02D8" #OPERATION_CODE[:power_on_delay]
 				self[:warming_remaining] = value
 				if value > 0
 					self[:warming] = true
@@ -206,11 +249,15 @@ class NecLcd < Control::Device
 				else
 					self[:warming] = false
 				end
+			else
+				logger.debug "-- NEC LCD, unknown response: #{data[10..13]}"
+				logger.debug "-- NEC LCD, for command: #{array_to_str(last_command)}"
+				logger.info "-- NEC LCD, full response was: #{data}"
 		end
 	end
 	
 
-	msg_type = {
+	MSG_TYPE = {
 		:command => 'A',
 		'B' => :command_reply,
 		:get_parameter => 'C',
@@ -220,23 +267,25 @@ class NecLcd < Control::Device
 	}
 	
 
-	operation_code = {
+	OPERATION_CODE = {
 		:video_input => '0060',
 		:audio_input => '022E',
 		:volume_status => '0062',
 		:mute_status => '008D',
 		:power_indicator => '02BE',
-		:power_on_delay => '02D8'
+		:power_on_delay => '02D8',
+		:contrast_status => '0012',
+		:brightness_status => '0010'
 	}
 	#
 	# Automatically creates a callable function for each command
 	#	http://blog.jayfields.com/2007/10/ruby-defining-class-methods.html
 	#	http://blog.jayfields.com/2008/02/ruby-dynamically-define-method.html
 	#
-	operation_code.each_key do |command|
+	OPERATION_CODE.each_key do |command|
 		define_method command do
 			type = :get_parameter
-			message = operation_code[command]
+			message = OPERATION_CODE[command]
 			send_checksum(type, message)
 		end
 	end
@@ -244,7 +293,7 @@ class NecLcd < Control::Device
 
 	def check_checksum(data)
 		check = 0
-		data[0..-3].each do |byte|	# Loop through the first to the third last element
+		data[1..-3].each do |byte|	# Loop through the second to the third last element
 			check = check ^ byte
 		end
 		return check == data[-2]	# Check the check sum equals the second last element
@@ -256,10 +305,10 @@ class NecLcd < Control::Device
 		# Prepare command for sending
 		#
 		command = "".concat(0x02) + command.concat(0x03)
-		command = "0*0#{msg_type[:type]}#{command.length.to_s(16).upcase.rjust(2, '0')}#{command}"
+		command = "0*0#{MSG_TYPE[type]}#{command.length.to_s(16).upcase.rjust(2, '0')}#{command}"
 		command = str_to_array(command)
 		
-		check = 0x01			# NEC SOH byte
+		check = 0			# NEC SOH byte
 		command.each do |byte|	# Loop through all elements
 			check = check ^ byte
 		end

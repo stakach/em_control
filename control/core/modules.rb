@@ -43,14 +43,14 @@ module Control
 		@@lookup = {}	# instance => DB Record
 
 
-		def initialize(schemeDevice)
-			if @@instances[schemeDevice.id].nil?
-				if @@devices["#{schemeDevice.ip}:#{schemeDevice.port}"].nil?
-					@@instances[schemeDevice.id] = schemeDevice
-					@@devices["#{schemeDevice.ip}:#{schemeDevice.port}"] = schemeDevice
-					instantiate_module(schemeDevice)
+		def initialize(controllerDevice)
+			if @@instances[controllerDevice.id].nil?
+				if @@devices["#{controllerDevice.ip}:#{controllerDevice.port}"].nil?
+					@@instances[controllerDevice.id] = controllerDevice
+					@@devices["#{controllerDevice.ip}:#{controllerDevice.port}"] = controllerDevice
+					instantiate_module(controllerDevice)
 				else
-					@@instances[schemeDevice.id] = @@devices["#{schemeDevice.ip}:#{schemeDevice.port}"]
+					@@instances[controllerDevice.id] = @@devices["#{controllerDevice.ip}:#{controllerDevice.port}"]
 				end
 			else
 				#
@@ -73,16 +73,16 @@ module Control
 		protected
 	
 	
-		def instantiate_module(schemeDevice)
-			if Modules[schemeDevice.dependency.id].nil?
-				Modules.load_module(schemeDevice.dependency)		# This is the re-load code function (live bug fixing - removing functions does not work)
+		def instantiate_module(controllerDevice)
+			if Modules[controllerDevice.dependency.id].nil?
+				Modules.load_module(controllerDevice.dependency)		# This is the re-load code function (live bug fixing - removing functions does not work)
 			end
-			@instance = Modules[schemeDevice.dependency.id].new(System.schemes[schemeDevice.scheme_id])
-			@@lookup[@instance] = schemeDevice
+			@instance = Modules[controllerDevice.dependency.id].new(System.controllers[controllerDevice.controller_id])
+			@@lookup[@instance] = controllerDevice
 			Modules.load_lock.synchronize {		# TODO::dangerous (locking on reactor thread)
 				Modules.loading = @instance
-				if !schemeDevice.udp
-					EM.connect schemeDevice.ip, schemeDevice.port, Device::Base
+				if !controllerDevice.udp
+					EM.connect controllerDevice.ip, controllerDevice.port, Device::Base
 				else
 					#
 					# Load UDP device here
@@ -91,7 +91,7 @@ module Control
 					#	Call connected
 					#
 					devBase = DatagramBase.new
-					$datagramServer.add_device(schemeDevice, devBase)
+					$datagramServer.add_device(controllerDevice, devBase)
 					EM.defer do
 						devBase.call_connected
 					end
@@ -103,12 +103,13 @@ module Control
 
 	class LogicModule
 		@@instances = {}	# id => module instance
+		@@lookup = {}	# instance => DB Record
 
 
-		def initialize(schemeDevice)
-			if @@instances[schemeDevice.id].nil?
-				@@instances[schemeDevice.id] = self
-				instantiate_module(schemeDevice)
+		def initialize(controllerLogic)
+			if @@instances[controllerLogic.id].nil?
+				@@instances[controllerLogic.id] = self
+				instantiate_module(controllerLogic)
 			else
 				#
 				# Perform in place update
@@ -117,16 +118,21 @@ module Control
 				# check differences (if any then create a new instance for "ip:port" and id)
 			end
 		end
+		
+		def self.lookup
+			@@lookup
+		end
 
 
 		protected
 
 
-		def instantiate_module(schemeDevice)
-			if Modules[schemeDevice.dependency.id].nil?
-				Modules.load_module(schemeDevice.dependency)		# This is the re-load code function (live bug fixing - removing functions does not work)
+		def instantiate_module(controllerLogic)
+			if Modules[controllerLogic.dependency.id].nil?
+				Modules.load_module(controllerLogic.dependency)		# This is the re-load code function (live bug fixing - removing functions does not work)
 			end
-			@instance = Modules[schemeDevice.dependency.id].new(System.schemes[schemeDevice.scheme_id])
+			@instance = Modules[controllerLogic.dependency.id].new(System.controllers[controllerLogic.controller_id])
+			@@lookup[@instance] = controllerLogic
 		end
 	end
 end

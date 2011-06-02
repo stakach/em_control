@@ -99,12 +99,12 @@ module Control
 			#
 			# Load the system based on the database
 			#
-			Scheme.all.each do |scheme|
-				System.new(scheme, @logLevel)
+			Controller.all.each do |controller|
+				System.new(controller, @logLevel)
 			end
 			
 			#
-			# AutoLoad the interfaces
+			# AutoLoad the interfaces (we should do this automatically)
 			#
 			require ROOT_DIR + '/control/interfaces/telnet/telnet.rb'
 			TelnetServer.start

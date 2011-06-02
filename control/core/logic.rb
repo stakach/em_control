@@ -31,6 +31,11 @@ module Control
 		protected
 		
 
+		def setting(name)
+			LogicModule.lookup[self]
+		end
+		
+
 		attr_reader :system
 		
 		

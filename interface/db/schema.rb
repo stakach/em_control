@@ -12,6 +12,27 @@
 
 ActiveRecord::Schema.define(:version => 20110507032735) do
 
+  create_table "controller_devices", :force => true do |t|
+    t.integer "controller_id"
+    t.integer "dependency_id"
+    t.string  "ip"
+    t.integer "port"
+    t.boolean "tls",           :default => false
+    t.boolean "udp",           :default => false
+    t.integer "priority",      :default => 0
+  end
+
+  create_table "controller_logics", :force => true do |t|
+    t.integer "controller_id"
+    t.integer "dependency_id"
+  end
+
+  create_table "controllers", :force => true do |t|
+    t.string  "name"
+    t.text    "description"
+    t.boolean "active",      :default => true
+  end
+
   create_table "dependencies", :force => true do |t|
     t.integer "dependency_id"
     t.string  "classname"
@@ -21,25 +42,16 @@ ActiveRecord::Schema.define(:version => 20110507032735) do
     t.text    "description"
   end
 
-  create_table "scheme_devices", :force => true do |t|
-    t.integer "scheme_id"
-    t.integer "dependency_id"
-    t.string  "ip"
-    t.integer "port"
-    t.boolean "tls",           :default => false
-    t.boolean "udp",           :default => false
-    t.integer "priority",      :default => 0
-  end
-
-  create_table "scheme_logics", :force => true do |t|
-    t.integer "dependency_id"
-    t.integer "scheme_id"
-  end
-
-  create_table "schemes", :force => true do |t|
-    t.string  "name"
-    t.text    "description"
-    t.boolean "active",      :default => true
+  create_table "settings", :force => true do |t|
+    t.integer  "object_id"
+    t.string   "object_type"
+    t.string   "name"
+    t.text     "description"
+    t.integer  "value_type"
+    t.float    "float_value"
+    t.integer  "integer_value"
+    t.text     "text_value"
+    t.datetime "datetime_value"
   end
 
 end

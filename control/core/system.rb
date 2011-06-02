@@ -1,44 +1,44 @@
 module Control
 	class System
 
-		@@systems = {}	# system_name => system instance
-		@@schemes = {}	# scheme_id => system instance
+		@@systems = {}		# system_name => system instance
+		@@controllers = {}	# controller_id => system instance
 		@@logger = nil
 
-		def initialize(scheme, log_level)
-			super		
+		def initialize(controller, log_level)
+			super
 
-			if @@schemes[scheme.id].nil?
+			if @@controllers[controller.id].nil?
 
-				@modules = {}	# scheme modules	:name => module instance (device or logic)
+				@modules = {}	# controller modules	:name => module instance (device or logic)
 				@communicator = Control::Communicator.new(self)
 				@log_level = log_level
 		
-				@logger = Log4r::Logger.new("#{scheme.name}")
-				file = Log4r::RollingFileOutputter.new(scheme.name, {:maxsize => 4194304, :filename => "#{ROOT_DIR}/interface/log/#{scheme.name}.log"})	# 4mb file
+				@logger = Log4r::Logger.new("#{controller.name}")
+				file = Log4r::RollingFileOutputter.new(controller.name, {:maxsize => 4194304, :filename => "#{ROOT_DIR}/interface/log/#{controller.name}.log"})	# 4mb file
 				file.level = log_level
 				@logger.add(Log4r::Outputter['console'], Log4r::Outputter['udp'], file)	# common console output for all venues
 
 				#
 				# Setup the systems links
 				#
-				@@systems[scheme.name.to_sym] = self
-				@@schemes[scheme.id] = self
+				@@systems[controller.name.to_sym] = self
+				@@controllers[controller.id] = self
 		
 				#
 				# Load the modules ()
 				#	
-				#Dependency.for_scheme(scheme).each do |dep|
+				#Dependency.for_controller(controller).each do |dep|
 				#	if @@modules[dep.id].nil?
-				#		Scheme.reload_module(dep)		# This is the re-load code function (live bug fixing - removing functions does not work)
+				#		controller.reload_module(dep)		# This is the re-load code function (live bug fixing - removing functions does not work)
 				#	end
 				#end
 			
-				scheme.devices.includes(:dependency).each do |device|
+				controller.devices.includes(:dependency).each do |device|
 					load_hooks(device, DeviceModule.new(device))
 				end
 			
-				scheme.logics.includes(:dependency).each do |logic|
+				controller.logics.includes(:dependency).each do |logic|
 					load_hooks(logic, LogicModule.new(logic))
 				end
 			else
@@ -66,8 +66,8 @@ module Control
 			@@logger = log
 		end
 		
-		def self.schemes
-			@@schemes
+		def self.controllers
+			@@controllers
 		end
 	
 		def self.systems
