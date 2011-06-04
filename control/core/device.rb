@@ -37,6 +37,12 @@ module Control
 		end
 		
 
+		#
+		# required by base for send logic
+		#
+		attr_reader :status_lock
+		
+
 		protected
 		
 
@@ -51,14 +57,23 @@ module Control
 		end
 		
 		def setting(name)
-			DeviceModule.lookup[self]
+			val = DeviceModule.lookup[self].settings.where("name = ?", name).first || DeviceModule.lookup[self].dependency.settings.where("name = ?", name).first
+			
+			if !val.nil?
+				case val.value_type
+					when 0
+						return val.text_value
+					when 1
+						return val.integer_value
+					when 2
+						return val.float_value
+					when 3
+						return val.datetime_value
+				end
+			end
+			
+			return nil
 		end
-		
-		#
-		# required by base for send logic
-		#
-		attr_reader :status_lock
-
 
 		def send(data, options = {})
 			error = @base.send(data, options)
@@ -72,8 +87,9 @@ module Control
 				if @status_emit[options[:emit]].nil?
 					@status_emit[options[:emit]] = [ConditionVariable.new]
 				end
-					
-				@status_emit[options[:emit]] << one_shot(15) do # TODO:: Emit timer should be configurable
+				
+				timeout = options[:emit_wait] || (@base.default_send_options[:retries] * @base.default_send_options[:timeout])
+				@status_emit[options[:emit]] << one_shot(timeout) do
 					@status_lock.synchronize {
 						if @status_emit.has_key?(options[:emit])
 							var = @status_emit.delete(options[:emit])
@@ -88,9 +104,9 @@ module Control
 							end
 						end
 					}
-				end	
+				end
 
-				@status_emit[options[:emit]].wait(@status_lock)
+				@status_emit[options[:emit]][0].wait(@status_lock)
 				
 				#
 				# Locked in send if emit is set

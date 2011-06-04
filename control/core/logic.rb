@@ -32,7 +32,22 @@ module Control
 		
 
 		def setting(name)
-			LogicModule.lookup[self]
+			val = LogicModule.lookup[self].settings.where("name = ?", name).first || LogicModule.lookup[self].dependency.settings.where("name = ?", name).first
+			
+			if !val.nil?
+				case val.value_type
+					when 0
+						return val.text_value
+					when 1
+						return val.integer_value
+					when 2
+						return val.float_value
+					when 3
+						return val.datetime_value
+				end
+			end
+			
+			return nil
 		end
 		
 

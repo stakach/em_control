@@ -48,10 +48,10 @@ class NecLcd < Control::Device
 		send_checksum(type, message)
 	end
 	
-	def power_status
+	def power_on?
 		type = :command
 		message = "01D6"
-		send_checksum(type, message)
+		send_checksum(type, message, {:emit => :power})
 	end
 	
 
@@ -193,24 +193,27 @@ class NecLcd < Control::Device
 				#
 				# Power on and off
 				#	8..9 == "00" means no error 
-				#	10..15 == "C203D6" Means power comamnd
-				
-				if data[10..15] == "C203D6"
+				if data[10..15] == "C203D6"	# Means power comamnd
 					if data[8..9] == "00"
 						self[:power] = data[19] == '1'
 						if self[:power]
 							power_on_delay	# wait until the screen has turned on before sending commands
 						end
-						return true
 					else
 						logger.info "-- NEC LCD, command failed: #{array_to_str(last_command)}"
 						logger.info "-- NEC LCD, response was: #{data}"
 						return false	# command failed
 					end
-				elsif data[10..13] == "00D6"					# Power status response
-					self[:power] = data[20..23].to_i(16) == 1		# Value == 1
-					return false
+				elsif data[10..13] == "00D6"	# Power status response
+					if data[10..11] == "00"
+						self[:power] = data[23] == '1'		# Value == 1
+					else
+						logger.info "-- NEC LCD, command failed: #{array_to_str(last_command)}"
+						logger.info "-- NEC LCD, response was: #{data}"
+						return false	# command failed
+					end
 				end
+				
 			when :get_parameter_reply, :set_parameter_reply
 				if data[8..9] == "00"
 					parse_response(data)
@@ -229,8 +232,8 @@ class NecLcd < Control::Device
 	
 
 	def do_poll
+		power_on?
 		power_on_delay
-		power_status
 		video_input
 		audio_input
 		volume_status
@@ -317,7 +320,7 @@ class NecLcd < Control::Device
 		define_method command do
 			type = :get_parameter
 			message = OPERATION_CODE[command]
-			send_checksum(type, message, {:priority => 0})	# Status polling is a low priority
+			send_checksum(type, message)	# Status polling is a low priority
 		end
 	end
 

@@ -13,17 +13,17 @@ module Control
 				:max_waits => 3,
 				:retries => 2,
 				:hex_string => false,
-				:timeout => 5,
-				:priority => 50
+				:timeout => 5
 			}
 
 			@receive_queue = Queue.new	# So we can process responses in different ways
-			@dummy_queue = Queue.new	# === dummy queue
 			@task_queue = Queue.new		# basically we add tasks here that we want to run in a strict order
-			@send_queue = Containers::PriorityQueue.new
+			
+			@dummy_queue = Queue.new	# === dummy queue (informs when there is data to read from either the high or regular queues)
+			@pri_queue = Queue.new		# high priority
+			@send_queue = Queue.new		# regular priority
 			@send_queue.extend(MonitorMixin)
 
-			@queue_lock = Mutex.new		# Protects @send_queue modifications
 			@receive_lock = Mutex.new	# Recieve data communications
 			@send_lock = Mutex.new		# For in sync send and receives when required
 
@@ -31,11 +31,9 @@ module Control
 			@connected_condition = ConditionVariable.new		# for maintaining the current queue on disconnect and re-starting
 		
 				
-			@status_lock = Mutex.new
-			@last_command = {}
+			@status_lock = Mutex.new	# A lock for last command and is_connected
+			@last_command = {}		# The last command sent
 			@is_connected = false
-				
-			@connect_retry = 0		# delay if a retry happens straight again
 
 			#
 			# Configure links between objects (This is a very loose tie)
@@ -67,22 +65,25 @@ module Control
 			# Send event loop
 			#
 			EM.defer do
-				data = nil
-				while true
-					begin
-						@dummy_queue.pop
-						@queue_lock.synchronize {
-							data = @send_queue.pop
-						}
-						@send_lock.synchronize {
-							@send_queue.synchronize do
-								process_send(data)
+				@send_queue.synchronize do	# this thread is the send queue (so we lock it)
+					data = nil
+					while true
+						begin
+							@dummy_queue.pop
+						
+							if @pri_queue.empty?
+								data = @send_queue.pop
+							else
+								data = @pri_queue.pop
 							end
-						}
-					rescue => e
-						@logger.error "-- module #{@parent.class} in em_control.rb, base : error in send loop --"
-						@logger.error e.message
-						@logger.error e.backtrace
+							@send_lock.synchronize {
+								process_send(data)
+							}
+						rescue => e
+							@logger.error "-- module #{@parent.class} in em_control.rb, base : error in send loop --"
+							@logger.error e.message
+							@logger.error e.backtrace
+						end
 					end
 				end
 			end
@@ -141,15 +142,13 @@ module Control
 			if !options[:emit].nil?
 				@parent.status_lock.lock
 			end
-			
-			@queue_lock.synchronize {
-				if @send_queue.mon_try_enter				# is this the same thread?
-					@send_queue.push(options, 100)		# Prioritise the command
-					@send_queue.mon_exit
-				else
-					@send_queue.push(options, options[:priority])
-				end
-			}
+
+			if @send_queue.mon_try_enter			# is this the same thread?
+				@pri_queue.push(options)		# Prioritise the command
+				@send_queue.mon_exit
+			else
+				@send_queue.push(options)
+			end
 			@dummy_queue.push(nil)	# informs our send loop that we are ready
 				
 			return false
@@ -222,6 +221,7 @@ module Control
 				#	and avoid any errors (these would have been otherwise set during a send)
 				#
 				@receive_lock.unlock
+				@logger.debug 'NO WAIT'
 				@send_lock.synchronize {
 					self.process_data
 				}
@@ -351,14 +351,17 @@ module Control
 				end
 			}
 		end
-			
+		
 		def attempt_retry
-			@status_lock.synchronize {
-				if !@send_queue.has_priority?(99) && @last_command[:retries] > 0	# no user defined replacements
-					@last_command[:retries] -= 1
-					@send_queue.push(@last_command, 99)
-				end
-			}
+			@status_lock.lock		# for last_command
+			if @pri_queue.empty? && @last_command[:retries] > 0	# no user defined replacements and retries left
+				@last_command[:retries] -= 1
+				@pri_queue.push(@last_command)
+				@status_lock.unlock
+				@dummy_queue.push(nil)	# informs our send loop that we are ready
+			else
+				@status_lock.unlock
+			end
 		end
 	end
 

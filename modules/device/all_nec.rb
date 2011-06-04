@@ -80,9 +80,6 @@ class AllNec < Control::Device
 	def disconnected
 		#
 		# Perform any cleanup functions here
-		#	send commands should not be called from here and may cause undesirable results (deadlock)
-		#
-		#	
 		#
 		@polling_timer.cancel unless @polling_timer.nil?
 	end
