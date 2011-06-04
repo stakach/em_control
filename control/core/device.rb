@@ -73,7 +73,7 @@ module Control
 					@status_emit[options[:emit]] = [ConditionVariable.new]
 				end
 					
-				@status_emit[options[:emit]] << EM::Timer.new(15) do 
+				@status_emit[options[:emit]] << one_shot(15) do # TODO:: Emit timer should be configurable
 					@status_lock.synchronize {
 						if @status_emit.has_key?(options[:emit])
 							var = @status_emit.delete(options[:emit])

@@ -14,7 +14,7 @@ module Control
 				:retries => 2,
 				:hex_string => false,
 				:timeout => 5,
-				:priority => 0
+				:priority => 50
 			}
 
 			@receive_queue = Queue.new	# So we can process responses in different ways
@@ -48,6 +48,7 @@ module Control
 				
 			#
 			# Task event loop
+			#	TODO:: Shutdown flag
 			#
 			EM.defer do
 				while true
@@ -133,21 +134,23 @@ module Control
 				
 			#
 			# Use a monitor here to allow for re-entrant locking
-			#	This will allow for a priority queue and then we guarentee order of operations
+			#	This allows for a priority queue and we guarentee order of operations
+			#
+			#	See Device::send for why we are locking here
 			#
 			if !options[:emit].nil?
 				@parent.status_lock.lock
 			end
-				
+			
 			@queue_lock.synchronize {
-				if @send_queue.mon_try_enter			# is this the same thread?
-					@send_queue.push(options, 99)		# Prioritise the command
+				if @send_queue.mon_try_enter				# is this the same thread?
+					@send_queue.push(options, 100)		# Prioritise the command
 					@send_queue.mon_exit
 				else
 					@send_queue.push(options, options[:priority])
 				end
 			}
-			@dummy_queue.push(nil)	# informs our send loop that we are ready for it
+			@dummy_queue.push(nil)	# informs our send loop that we are ready
 				
 			return false
 		rescue => e
@@ -202,7 +205,7 @@ module Control
 		end
 		
 		def do_receive_data(data)
-			@receive_queue.push(data)
+			@receive_queue.push(data)	# For processing on the send queue if the thread is locked
 					
 			@receive_lock.lock
 			if @send_lock.locked?
@@ -230,7 +233,7 @@ module Control
 		#
 		def process_data
 			if @parent.respond_to?(:received)
-				return @parent.received(str_to_array(@receive_queue.pop(true)))	# non-blocking call (will crash if there is no data)
+				return @parent.received(str_to_array(@receive_queue.pop(true)))	# non-blocking call (will throw an error if there is no data)
 			else	# If no receive function is defined process the next command
 				@receive_queue.pop(true)
 				return true
@@ -332,14 +335,14 @@ module Control
 		def wait_response
 			@receive_lock.synchronize {
 				if @receive_queue.empty?
-					@timeout = EM::Timer.new(@last_command[:timeout]) do 
-						@receive_lock.synchronize {
-							@wait_condition.signal		# wake up the thread
-						}
-						#
-						# log the event here
-						#
+					@timeout = EM::Timer.new(@last_command[:timeout]) do
 						EM.defer do
+							@receive_lock.synchronize {
+								@wait_condition.signal		# wake up the thread
+							}
+							#
+							# log the event here
+							#
 							@logger.debug "-- module #{@parent.class} in em_control.rb, wait_response --"
 							@logger.debug "A response was not recieved for the current command"
 						end
