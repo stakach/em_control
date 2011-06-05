@@ -1,8 +1,12 @@
 class NecLcd < Control::Device
 
-	def initialize *args
-		super	# Must be called
-		
+	#
+	# Called on module load complete
+	#	Alternatively you can use initialize however will
+	#	not have access to settings and this is called
+	#	soon afterwards
+	#
+	def onLoad
 		#
 		# Setup constants
 		#
@@ -75,7 +79,7 @@ class NecLcd < Control::Device
 	}
 	def switch_to(input)
 		input = input.to_sym if input.class == String
-		self[:target_input] = input
+		#self[:target_input] = input
 		
 		logger.debug "-- NEC LCD, requested to switch to: #{input}"
 		
@@ -96,7 +100,7 @@ class NecLcd < Control::Device
 	}
 	def switch_audio(input)
 		input = input.to_sym if input.class == String
-		self[:target_audio] = input
+		#self[:target_audio] = input
 		
 		logger.debug "-- NEC LCD, requested to switch audio to: #{input}"
 		
@@ -125,13 +129,12 @@ class NecLcd < Control::Device
 	def brightness(val)
 		val = 100 if val > 100
 		val = 0 if val < 0
-		
-		type = :set_parameter
+
 		message = OPERATION_CODE[:brightness_status]
 		message += val.to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
 		brightness_status
-		send_checksum(type, message)
+		send_checksum(:set_parameter, message)
 		send_checksum(:command, '0C')	# Save the settings
 	end
 	
@@ -139,12 +142,11 @@ class NecLcd < Control::Device
 		val = 100 if val > 100
 		val = 0 if val < 0
 		
-		type = :set_parameter
 		message = OPERATION_CODE[:contrast_status]
 		message += val.to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
 		contrast_status
-		send_checksum(type, message)
+		send_checksum(:set_parameter, message)
 		send_checksum(:command, '0C')	# Save the settings
 	end
 	
@@ -163,21 +165,19 @@ class NecLcd < Control::Device
 	def mute
 		logger.debug "-- NEC LCD, requested to mute audio"
 		
-		type = :set_parameter
 		message = OPERATION_CODE[:mute_status]
 		message += "0001"	# Value of input as a hex string
 		
-		send_checksum(type, message)
+		send_checksum(:set_parameter, message)
 	end
 	
 	def unmute
 		logger.debug "-- NEC LCD, requested to unmute audio"
-		
-		type = :set_parameter
+
 		message = OPERATION_CODE[:mute_status]
 		message += "0000"	# Value of input as a hex string
 		
-		send_checksum(type, message)
+		send_checksum(:set_parameter, message)
 	end
 	
 
@@ -225,11 +225,16 @@ class NecLcd < Control::Device
 						logger.info "-- NEC LCD, response was: #{data}"
 						return false	# command failed
 					end
+				
 				end
 				
 			when :get_parameter_reply, :set_parameter_reply
 				if data[8..9] == "00"
 					parse_response(data)
+				elsif data[8..9] == 'BE'	# Wait response
+					sleep(2)
+					send(last_command)
+					logger.debug "-- NEC LCD, response was a wait command"
 				else
 					logger.info "-- NEC LCD, get or set failed: #{array_to_str(last_command)}"
 					logger.info "-- NEC LCD, response was: #{data}"
@@ -265,13 +270,13 @@ class NecLcd < Control::Device
 		case OPERATION_CODE[data[10..13]]
 			when :video_input
 				self[:input] = INPUTS.invert[value]
-				self[:target_input] = self[:input] if self[:target_input].nil?
-				switch_to(self[:target_input]) unless self[:input] == self[:target_input]
+				#self[:target_input] = self[:input] if self[:target_input].nil?
+				#switch_to(self[:target_input]) unless self[:input] == self[:target_input]
 				
 			when :audio_input
 				self[:audio] = AUDIO.invert[value]
-				self[:target_audio] = self[:audio] if self[:target_audio].nil?
-				switch_audio(self[:target_audio]) unless self[:audio] == self[:target_audio]
+				#self[:target_audio] = self[:audio] if self[:target_audio].nil?
+				#switch_audio(self[:target_audio]) unless self[:audio] == self[:target_audio]
 				
 			when :volume_status
 				self[:volume_max] = max
@@ -299,7 +304,7 @@ class NecLcd < Control::Device
 				end
 			when :auto_setup
 				# auto_setup
-				# check for null command
+				# nothing needed to do here
 			else
 				logger.info "-- NEC LCD, unknown response: #{data[10..13]}"
 				logger.info "-- NEC LCD, for command: #{array_to_str(last_command)}"

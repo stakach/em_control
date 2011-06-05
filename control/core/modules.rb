@@ -38,18 +38,24 @@ module Control
 
 
 	class DeviceModule
-		@@instances = {}	# id => instance
-		@@devices = {}	# ip:port => instance
-		@@lookup = {}	# instance => DB Record
+		@@instances = {}	# id => db instance
+		@@devices = {}	# ip:port => db instance
+		@@lookup = {}	# module instance => db instance
 
 
 		def initialize(controllerDevice)
 			if @@instances[controllerDevice.id].nil?
 				if @@devices["#{controllerDevice.ip}:#{controllerDevice.port}"].nil?
+					#
+					# 
+					#
 					@@instances[controllerDevice.id] = controllerDevice
 					@@devices["#{controllerDevice.ip}:#{controllerDevice.port}"] = controllerDevice
 					instantiate_module(controllerDevice)
 				else
+					#
+					# A seperate module connecting to the same IP address
+					#
 					@@instances[controllerDevice.id] = @@devices["#{controllerDevice.ip}:#{controllerDevice.port}"]
 				end
 			else
@@ -77,8 +83,16 @@ module Control
 			if Modules[controllerDevice.dependency.id].nil?
 				Modules.load_module(controllerDevice.dependency)		# This is the re-load code function (live bug fixing - removing functions does not work)
 			end
-			@instance = Modules[controllerDevice.dependency.id].new(System.controllers[controllerDevice.controller_id])
+			#
+			# Instance of a module
+			#
+			@instance = Modules[controllerDevice.dependency_id].new(System.controllers[controllerDevice.controller_id])
+			
+			#
+			# Database settings
+			#
 			@@lookup[@instance] = controllerDevice
+			devBase = nil
 			Modules.load_lock.synchronize {		# TODO::dangerous (locking on reactor thread)
 				Modules.loading = @instance
 				if !controllerDevice.udp
@@ -92,23 +106,36 @@ module Control
 					#
 					devBase = DatagramBase.new
 					$datagramServer.add_device(controllerDevice, devBase)
-					EM.defer do
-						devBase.call_connected
-					end
 				end
 			}
+			
+			if @instance.respond_to?(:onLoad)
+				begin
+					@instance.onLoad
+				rescue => e
+					System.logger.error "-- device module #{@instance.class} error whilst calling: onLoad --"
+					System.logger.error e.message
+					System.logger.error e.backtrace
+				end
+			end
+			
+			if controllerDevice.udp
+				EM.defer do
+					devBase.call_connected	# UDP is stateless (always connected)
+				end
+			end
 		end
 	end
 
 
 	class LogicModule
-		@@instances = {}	# id => module instance
-		@@lookup = {}	# instance => DB Record
+		@@instances = {}	# id => instance
+		@@lookup = {}	# module => DB Record
 
 
 		def initialize(controllerLogic)
 			if @@instances[controllerLogic.id].nil?
-				@@instances[controllerLogic.id] = self
+				@@instances[controllerLogic.id] = controllerLogic
 				instantiate_module(controllerLogic)
 			else
 				#
@@ -122,6 +149,8 @@ module Control
 		def self.lookup
 			@@lookup
 		end
+		
+		attr_reader :instance
 
 
 		protected
@@ -131,8 +160,17 @@ module Control
 			if Modules[controllerLogic.dependency.id].nil?
 				Modules.load_module(controllerLogic.dependency)		# This is the re-load code function (live bug fixing - removing functions does not work)
 			end
-			@instance = Modules[controllerLogic.dependency.id].new(System.controllers[controllerLogic.controller_id])
+			@instance = Modules[controllerLogic.dependency_id].new(System.controllers[controllerLogic.controller_id])
 			@@lookup[@instance] = controllerLogic
+			if @instance.respond_to?(:onLoad)
+				begin
+					@instance.onLoad
+				rescue => e
+					System.logger.error "-- logic module #{@instance.class} error whilst calling: onLoad --"
+					System.logger.error e.message
+					System.logger.error e.backtrace
+				end
+			end
 		end
 	end
 end

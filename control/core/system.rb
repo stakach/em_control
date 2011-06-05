@@ -98,7 +98,12 @@ module Control
 		def load_hooks(device, mod)
 			module_name = device.dependency.module_name
 			count = 2
-				
+			
+			#
+			# Loads the modules and auto-names them (display_1, display_2)
+			#	The first module of a type has two names (display and display_1 for example)
+			#	TODO:: ensure load order
+			#
 			if not @modules[module_name.to_sym].nil?
 				while @modules["#{module_name}_#{count}".to_sym].nil?
 					count += 1

@@ -42,7 +42,7 @@ module Control
 			@parent = Modules.loading
 			@parent.setbase(self)
 			@logger = @parent.logger
-			@tls_enabled = DeviceModule.lookup[@parent][2]
+			@tls_enabled = DeviceModule.lookup[@parent].tls
 				
 			#
 			# Task event loop
@@ -57,6 +57,8 @@ module Control
 						@logger.error "-- module #{@parent.class} in em_control.rb, base : error in task loop --"
 						@logger.error e.message
 						@logger.error e.backtrace
+					ensure
+						ActiveRecord::Base.clear_active_connections!
 					end
 				end
 			end
@@ -83,6 +85,8 @@ module Control
 							@logger.error "-- module #{@parent.class} in em_control.rb, base : error in send loop --"
 							@logger.error e.message
 							@logger.error e.backtrace
+						ensure
+							ActiveRecord::Base.clear_active_connections!
 						end
 					end
 				end
@@ -116,6 +120,8 @@ module Control
 						@logger.error "-- module #{@parent.class} in em_control.rb, base : error in recieve loop --"
 						@logger.error e.message
 						@logger.error e.backtrace
+					ensure
+						ActiveRecord::Base.clear_active_connections!
 					end
 				end
 			end
@@ -209,19 +215,17 @@ module Control
 		end
 		
 		def call_connected
-			@task_queue.push lambda {
-				@status_lock.synchronize {
-					@is_connected = true
-				}				
-
-				@parent[:connected] = true
+			@status_lock.synchronize {
+				@is_connected = true
+			}
 				
-				@send_lock.synchronize {
-					@connected_condition.signal		# wake up the thread
-				}
-					
+			@send_lock.synchronize {
+				@connected_condition.signal		# wake up the thread
+			}
+			
+			@task_queue.push lambda {
+				@parent[:connected] = true
 				return unless @parent.respond_to?(:connected)
-					
 				begin
 					@parent.connected
 				rescue => e

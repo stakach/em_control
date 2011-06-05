@@ -11,6 +11,7 @@ socket.send( 'some_event', {name: 'ismael', message : 'Hello world'} );
 */
 var Off = false;
 var On = true;
+var AllControllers = {};
 
 var EventsDispatcher = function (url, calls) {
 	var conn = null;
@@ -19,6 +20,7 @@ var EventsDispatcher = function (url, calls) {
 	var connected = true; // This is for disconnect trigger in conn.onclose
 	var ready = false;
 	var polling = null;
+	AllControllers[the_url] = this;
 
 	var system_calls = {
 		open: function () { },
@@ -66,6 +68,11 @@ var EventsDispatcher = function (url, calls) {
 		return this; // chainable
 	};
 
+	this.unbind = function (event_name) {
+		delete callbacks[event_name];
+		return this; // chainable
+	};
+
 	var dispatch = function (event_name, message) {
 		var chain = callbacks[event_name];
 		if (chain === undefined) return; // no callbacks for this event
@@ -95,7 +102,7 @@ var EventsDispatcher = function (url, calls) {
 				//
 				// Re-register status events then call ready
 				//
-				polling = setInterval("send('ping')", 60000); // Maintain the connection by pinging every 1min
+				polling = setInterval("AllControllers['" + the_url + "'].send('ping')", 60000); // Maintain the connection by pinging every 1min
 				try {
 					for (event_name in callbacks) {
 						send("register", event_name.split('.'));

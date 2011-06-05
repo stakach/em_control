@@ -61,19 +61,14 @@ module Control
 			
 
 			def unbind
-				@task_queue.push lambda {
-					
-					@status_lock.synchronize {
+				@status_lock.synchronize {
 						# set offline
-						@is_connected = false
-					}
-					
-					#
-					# Run on reactor thread to ensure immidiate execution
-					#
+					@is_connected = false
+				}			
+
+				@task_queue.push lambda {
 					@parent[:connected] = false
 					return unless @parent.respond_to?(:disconnected)
-
 					begin
 						@parent.disconnected
 					rescue => e
