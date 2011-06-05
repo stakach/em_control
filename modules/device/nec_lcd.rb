@@ -34,7 +34,6 @@ class NecLcd < Control::Device
 	# Power commands
 	#
 	def power(state)
-		type = :command
 		message = "C203D6"
 		
 		if [On, "on", :on].include?(state)
@@ -47,7 +46,7 @@ class NecLcd < Control::Device
 			logger.debug "-- NEC LCD, requested to power off"
 		end
 		
-		send_checksum(type, message)
+		send_checksum(:command, message)
 	end
 	
 	def power_on?
@@ -218,7 +217,7 @@ class NecLcd < Control::Device
 						if self[:power_target].nil?
 							self[:power_target] = self[:power]
 						elsif self[:power_target] != self[:power]
-							switch_to(self[:power_target])
+							power(self[:power_target])
 						end
 					else
 						logger.info "-- NEC LCD, command failed: #{array_to_str(last_command)}"
