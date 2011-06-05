@@ -87,6 +87,38 @@ module Control
 					end
 				end
 			end
+			
+			#
+			# Recieve event loop
+			#
+			EM.defer do
+				while true
+					begin
+						data = @receive_queue.pop
+						@receive_lock.lock
+						if @send_lock.locked?
+							@status_lock.synchronize {
+								@last_command[:response] = data
+							}
+							@wait_condition.signal		# signal the thread to wakeup
+							@receive_lock.unlock
+						else
+							#
+							# requires all the send locks ect to prevent recursive locks
+							#	and avoid any errors (these would have been otherwise set during a send)
+							#
+							@receive_lock.unlock
+							@send_lock.synchronize {
+								self.process_data(data)
+							}
+						end
+					rescue => e
+						@logger.error "-- module #{@parent.class} in em_control.rb, base : error in recieve loop --"
+						@logger.error e.message
+						@logger.error e.backtrace
+					end
+				end
+			end
 		end
 			
 
@@ -205,37 +237,15 @@ module Control
 		
 		def do_receive_data(data)
 			@receive_queue.push(data)	# For processing on the send queue if the thread is locked
-					
-			@receive_lock.lock
-			if @send_lock.locked?
-				begin
-					@timeout.cancel	# incase the timer is not active or nil
-				rescue
-				ensure
-					@wait_condition.signal		# signal the thread to wakeup
-					@receive_lock.unlock
-				end
-			else
-				#
-				# requires all the send locks ect to prevent recursive locks
-				#	and avoid any errors (these would have been otherwise set during a send)
-				#
-				@receive_lock.unlock
-				@logger.debug 'NO WAIT'
-				@send_lock.synchronize {
-					self.process_data
-				}
-			end
 		end
 		
 		#
 		# Controls the flow of data for retry puropses
 		#
-		def process_data
+		def process_data(data)
 			if @parent.respond_to?(:received)
-				return @parent.received(str_to_array(@receive_queue.pop(true)))	# non-blocking call (will throw an error if there is no data)
+				return @parent.received(str_to_array(data))	# non-blocking call (will throw an error if there is no data)
 			else	# If no receive function is defined process the next command
-				@receive_queue.pop(true)
 				return true
 			end
 		rescue => e
@@ -249,14 +259,6 @@ module Control
 				
 			return true
 		end
-	
-	
-		#
-		# Ready state for next attempt
-		#	WARN:: Must be called in send_lock critical section
-		#
-		#	A return false will always retry the command at the end of the queue
-		#
 
 		#
 		# Send data
@@ -265,56 +267,63 @@ module Control
 		#
 		def process_send(data)
 			@status_lock.lock
+			@last_command = data
 			if @is_connected == false
 				@status_lock.unlock
 				@connected_condition.wait(@send_lock)
 			else
 				@status_lock.unlock
 			end
-				
-			@status_lock.synchronize {
-				@last_command = data
-			}
 
-			EM.schedule proc {	# Send data on the reactor thread
-				begin
-					if !error?
-						do_send_data(data[:data])
+			@receive_lock.synchronize {
+				EM.schedule proc {	# Send data on the reactor thread
+					begin
+						if !error?
+							do_send_data(data[:data])
+						end
+					rescue => e
+						#
+						# Save the thread in case of bad data in that send
+						#
+						EM.defer do
+							@logger.error "-- module #{@parent.class} in em_control.rb, process_send : possible bad data --"
+							@logger.error e.message
+							@logger.error e.backtrace
+						end
 					end
-				rescue => e
-					#
-					# Save the thread in case of bad data in that send
-					#
-					EM.defer do
-						@logger.error "-- module #{@parent.class} in em_control.rb, process_send : possible bad data --"
-						@logger.error e.message
-						@logger.error e.backtrace
-					end
+				}
+				
+				#
+				# Synchronize the response
+				#
+				if data[:wait]
+					wait_response
 				end
 			}
-				
-			#
-			#	Synchronize the response
-			#
-			if data[:wait]
-				process_response
-			end
 		end
 			
 
-		def process_response
+		def wait_response
 			num_rets = nil
+			timeout = nil
 			@status_lock.synchronize {
 				num_rets = @last_command[:max_waits]
+				timeout = @last_command[:timeout]
 			}
 			begin
-				wait_response
-						
-				if @receive_queue.empty?	# The wait timeout occured - retry command
+				@wait_condition.wait(@receive_lock, timeout)
+				
+				data = nil
+				@status_lock.synchronize {
+					data = @last_command.delete(:response)
+				}
+				if data.nil?	# The wait timeout occured - retry command
+					@logger.debug "-- module #{@parent.class} in em_control.rb, wait_response --"
+					@logger.debug "A response was not recieved for the current command"
 					attempt_retry
 					return
 				else					# Process the data
-					response = process_data
+					response = process_data(data)
 					if response == false
 						attempt_retry
 						return
@@ -322,34 +331,12 @@ module Control
 						return
 					end
 				end
-
 				#
 				# If we haven't returned before we reach this point then the last data was
 				#	not relavent and we are still waiting (max wait == num_retries * timeout)
 				#
 				num_rets -= 1
 			end while num_rets > 0
-		end
-			
-
-		def wait_response
-			@receive_lock.synchronize {
-				if @receive_queue.empty?
-					@timeout = EM::Timer.new(@last_command[:timeout]) do
-						EM.defer do
-							@receive_lock.synchronize {
-								@wait_condition.signal		# wake up the thread
-							}
-							#
-							# log the event here
-							#
-							@logger.debug "-- module #{@parent.class} in em_control.rb, wait_response --"
-							@logger.debug "A response was not recieved for the current command"
-						end
-					end
-					@wait_condition.wait(@receive_lock)
-				end
-			}
 		end
 		
 		def attempt_retry

@@ -18,6 +18,7 @@ var EventsDispatcher = function (url, calls) {
 	var callbacks = {};
 	var connected = true; // This is for disconnect trigger in conn.onclose
 	var ready = false;
+	var polling = null;
 
 	var system_calls = {
 		open: function () { },
@@ -78,39 +79,45 @@ var EventsDispatcher = function (url, calls) {
 	//
 	// TODO:: implement unbind!!
 	//
-
 	function setup_connection() {
 		conn = new WebSocket(the_url);
 
 		// dispatch to the right handlers
 		conn.onmessage = function (evt) {
 			var json = JSON.parse(evt.data);
-			if (system_calls[json.event] === undefined)
+
+			if (system_calls[json.event] === undefined) {
 				dispatch(json.event, json.data);
-			else
-				system_calls[json.event](); // System event
+				return; // non-system event
+			}
+			else if (json.event == "ready") {
+
+				//
+				// Re-register status events then call ready
+				//
+				polling = setInterval("send('ping')", 60000); // Maintain the connection by pinging every 1min
+				try {
+					for (event_name in callbacks) {
+						send("register", event_name.split('.'));
+					}
+				} catch (err) { } // Catch any send errors incase we disconnect
+
+			}
+
+			system_calls[json.event](); // System event
 		};
 
 		conn.onclose = function () {
 			if (connected) {
 				connected = false;
+				clearInterval(polling);
 				system_calls.close();
 			}
 			setup_connection();
 		}
 		conn.onopen = function () {
-			send("system", [system]);
 			connected = true; // prevent multiple disconnect triggers
 			system_calls.open();
-
-			//
-			// Re-register status events
-			//
-			try {
-				for (event_name in callbacks) {
-					send("register", event_name.split('.'));
-				}
-			} catch (err) { } // Catch any send errors incase we disconnect
 		}
 	}
 	setup_connection();

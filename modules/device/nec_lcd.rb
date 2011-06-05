@@ -7,11 +7,8 @@ class NecLcd < Control::Device
 		# Setup constants
 		#
 		self[:volume_min] = 0
-		self[:volume_max] = 100
 		self[:brightness_min] = 0
-		self[:brightness_max] = 100
 		self[:contrast_min] = 0
-		self[:contrast_max] = 100
 		#self[:error] = []		TODO!!
 	end
 	
@@ -19,6 +16,7 @@ class NecLcd < Control::Device
 		do_poll
 	
 		@polling_timer = periodic_timer(50) do
+			logger.debug "-- Polling Display"
 			do_poll
 		end
 	end
@@ -109,6 +107,17 @@ class NecLcd < Control::Device
 		send_checksum(type, message)
 	end
 	
+	
+	#
+	# Auto adjust
+	#
+	def auto_adjust
+		message = "001E"	# Page + OP code
+		message += "0001"	# Value of input as a hex string
+		
+		send_checksum(:set_parameter, message)
+	end
+	
 
 	#
 	# Value based set parameter
@@ -117,39 +126,38 @@ class NecLcd < Control::Device
 		val = 100 if val > 100
 		val = 0 if val < 0
 		
-		logger.debug "-- NEC LCD, requested to change brightness to: #{val}"
-		
 		type = :set_parameter
 		message = OPERATION_CODE[:brightness_status]
 		message += val.to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
+		brightness_status
 		send_checksum(type, message)
+		send_checksum(:command, '0C')	# Save the settings
 	end
 	
-	def contrast(val)		
+	def contrast(val)
 		val = 100 if val > 100
 		val = 0 if val < 0
-		
-		logger.debug "-- NEC LCD, requested to change contrast to: #{val}"
 		
 		type = :set_parameter
 		message = OPERATION_CODE[:contrast_status]
 		message += val.to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
+		contrast_status
 		send_checksum(type, message)
+		send_checksum(:command, '0C')	# Save the settings
 	end
 	
-	def volume(val)		
+	def volume(val)
 		val = 100 if val > 100
 		val = 0 if val < 0
 		
-		logger.debug "-- NEC LCD, requested to change volume to: #{val}"
-		
-		type = :set_parameter
 		message = OPERATION_CODE[:volume_status]
 		message += val.to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
-		send_checksum(type, message)
+		volume_status
+		send_checksum(:set_parameter, message)
+		send_checksum(:command, '0C')	# Save the settings
 	end
 	
 	def mute
@@ -207,6 +215,11 @@ class NecLcd < Control::Device
 				elsif data[10..13] == "00D6"	# Power status response
 					if data[10..11] == "00"
 						self[:power] = data[23] == '1'		# Value == 1
+						if self[:power_target].nil?
+							self[:power_target] = self[:power]
+						elsif self[:power_target] != self[:power]
+							switch_to(self[:power_target])
+						end
 					else
 						logger.info "-- NEC LCD, command failed: #{array_to_str(last_command)}"
 						logger.info "-- NEC LCD, response was: #{data}"
@@ -226,9 +239,6 @@ class NecLcd < Control::Device
 		
 		return true # As monitor may inform us about other status events
 	end
-
-
-	private
 	
 
 	def do_poll
@@ -241,12 +251,15 @@ class NecLcd < Control::Device
 		contrast_status
 		mute_status
 	end
+
+
+	private
 	
 
 	def parse_response(data)
 	
 		# 14..15 == type (we don't care)
-		# 16..19 == Max (we don't care)
+		max = data[16..19].to_i(16)
 		value = data[20..23].to_i(16)
 
 		case OPERATION_CODE[data[10..13]]
@@ -261,12 +274,15 @@ class NecLcd < Control::Device
 				switch_audio(self[:target_audio]) unless self[:audio] == self[:target_audio]
 				
 			when :volume_status
+				self[:volume_max] = max
 				self[:volume] = value
 				
 			when :brightness_status
+				self[:brightness_max] = max
 				self[:brightness] = value
 				
 			when :contrast_status
+				self[:contrast_max] = max
 				self[:contrast] = value
 				
 			when :mute_status
@@ -281,6 +297,9 @@ class NecLcd < Control::Device
 				else
 					self[:warming] = false
 				end
+			when :auto_setup
+				# auto_setup
+				# check for null command
 			else
 				logger.info "-- NEC LCD, unknown response: #{data[10..13]}"
 				logger.info "-- NEC LCD, for command: #{array_to_str(last_command)}"
@@ -309,7 +328,8 @@ class NecLcd < Control::Device
 		:mute_status => '008D', '008D' => :mute_status,
 		:power_on_delay => '02D8', '02D8' => :power_on_delay,
 		:contrast_status => '0012', '0012' => :contrast_status,
-		:brightness_status => '0010', '0010' => :brightness_status
+		:brightness_status => '0010', '0010' => :brightness_status,
+		:auto_setup => '001E', '001E' => :auto_setup
 	}
 	#
 	# Automatically creates a callable function for each command
@@ -317,8 +337,12 @@ class NecLcd < Control::Device
 	#	http://blog.jayfields.com/2008/02/ruby-dynamically-define-method.html
 	#
 	OPERATION_CODE.each_key do |command|
-		define_method command do
-			type = :get_parameter
+		define_method command do |*args|
+			if args[0].nil? 
+				type = :get_parameter
+			else
+				type = args[0]
+			end
 			message = OPERATION_CODE[command]
 			send_checksum(type, message)	# Status polling is a low priority
 		end
@@ -341,7 +365,7 @@ class NecLcd < Control::Device
 		#
 		# build header + command and convert to a byte array
 		#
-		command = "".concat(0x02) + command.concat(0x03)
+		command = "".concat(0x02) + command
 		command = "0*0#{MSG_TYPE[type]}#{command.length.to_s(16).upcase.rjust(2, '0')}#{command}"
 		command = str_to_array(command)
 		
@@ -356,7 +380,7 @@ class NecLcd < Control::Device
 		command << check		# Add checksum
 		command << 0x0D		# delimiter required by NEC displays
 		command.insert(0, 0x01)	# insert SOH byte (not part of the checksum)
-		
+
 		send(command, options)
 	end
 end

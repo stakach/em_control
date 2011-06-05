@@ -99,8 +99,8 @@ module Control
 							# log the event here
 							#
 							EM.defer do
-								@logger.debug "-- module #{self.class} in device.rb, send --"
-								@logger.debug "An emit timeout occured"
+								logger.debug "-- module #{self.class} in device.rb, send --"
+								logger.debug "An emit timeout occured"
 							end
 						end
 					}

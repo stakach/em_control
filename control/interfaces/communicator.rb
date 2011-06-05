@@ -71,7 +71,7 @@ class Communicator
 		mod_sym = mod.class == String ? mod.to_sym : mod	# remember the symbol used by the interface to reference this module
 		status = status.to_sym if status.class == String
 		
-		mod = @system.modules[mod_sym]	# most efficient
+		mod = @system.modules[mod_sym].instance	# most efficient
 
 		@status_lock.synchronize {
 			@status_register[mod] ||= {}
@@ -120,7 +120,7 @@ class Communicator
 		mod_sym = mod.to_sym if mod.class == String
 		status = status.to_sym if status.class == String
 		
-		mod = @system.modules[mod_sym]
+		mod = @system.modules[mod_sym].instance
 		logger.debug "-- Interface #{interface.class} unregistered #{mod_sym}:#{status}"
 
 		@status_lock.synchronize {
@@ -192,7 +192,7 @@ class Communicator
 		EM.defer do
 			begin
 				@command_lock.synchronize {
-					@system.modules[mod].public_send(command, *args)	# Not send string however call function command
+					@system.modules[mod].instance.public_send(command, *args)	# Not send string however call function command
 				}
 			rescue => e
 				logger.warn "-- module #{mod} in communicator.rb, send_command : command unavaliable or bad module code --"

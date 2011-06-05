@@ -16,7 +16,8 @@ class HTML5Monitor
 	@@special_events = {
 		"system" => :system,
 		"authenticate" => :authenticate,
-		"ls" => :ls
+		"ls" => :ls,
+		"ping" => :ping
 	}
 	@@special_commands = {
 		"register" => :register,
@@ -106,6 +107,8 @@ class HTML5Monitor
 						else
 							try_auth(data[:data])
 						end
+					when :ping
+						@socket.send(JSON.generate({:event => "pong", :data => []}))
 					when :ls
 						@socket.send(JSON.generate({:event => "system",
 							:data => Communicator.system_list}))
@@ -124,6 +127,7 @@ class HTML5Monitor
 			end
 		}
 	rescue => e
+		logger = nil
 		@data_lock.synchronize {
 			logger = @system.nil? ? logger = Control::System.logger : @system.logger
 		}
