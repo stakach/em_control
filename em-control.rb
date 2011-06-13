@@ -24,6 +24,7 @@ require "log4r/outputter/udpoutputter"
 #
 require File.dirname(__FILE__) + '/control/constants.rb'
 require File.dirname(__FILE__) + '/control/utilities.rb'
+require File.dirname(__FILE__) + '/control/priority_queue.rb'
 require File.dirname(__FILE__) + '/control/core/modules.rb'
 require File.dirname(__FILE__) + '/control/core/status.rb'
 require File.dirname(__FILE__) + '/control/core/device.rb'

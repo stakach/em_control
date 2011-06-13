@@ -13,15 +13,16 @@ module Control
 				:max_waits => 3,
 				:retries => 2,
 				:hex_string => false,
-				:timeout => 5
+				:timeout => 5,
+				:priority => 0
 			}
 
 			@receive_queue = Queue.new	# So we can process responses in different ways
 			@task_queue = Queue.new		# basically we add tasks here that we want to run in a strict order
 			
 			@dummy_queue = Queue.new	# === dummy queue (informs when there is data to read from either the high or regular queues)
-			@pri_queue = Queue.new		# high priority
-			@send_queue = Queue.new		# regular priority
+			@pri_queue = PriorityQueue.new		# high priority
+			@send_queue = PriorityQueue.new		# regular priority
 			@send_queue.extend(MonitorMixin)
 
 			@receive_lock = Mutex.new	# Recieve data communications
@@ -34,6 +35,7 @@ module Control
 			@status_lock = Mutex.new	# A lock for last command and is_connected
 			@last_command = {}		# The last command sent
 			@is_connected = false
+			@connect_retry = 0		# Required by control_base (unbind)
 
 			#
 			# Configure links between objects (This is a very loose tie)
@@ -182,10 +184,10 @@ module Control
 			end
 
 			if @send_queue.mon_try_enter			# is this the same thread?
-				@pri_queue.push(options)		# Prioritise the command
+				@pri_queue.push(options, options[:priority])		# Prioritise the command
 				@send_queue.mon_exit
 			else
-				@send_queue.push(options)
+				@send_queue.push(options, options[:priority])
 			end
 			@dummy_queue.push(nil)	# informs our send loop that we are ready
 				

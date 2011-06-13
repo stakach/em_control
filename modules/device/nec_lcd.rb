@@ -17,15 +17,20 @@ class NecLcd < Control::Device
 	end
 	
 	def connected
+		power_on?
 		do_poll
 	
-		@polling_timer = periodic_timer(50) do
+		@polling_timer = periodic_timer(30) do
 			logger.debug "-- Polling Display"
 			do_poll
 		end
 	end
 
 	def disconnected
+		#
+		# Disconnected may be called without calling connected
+		#	Hence the check if timer is nil here
+		#
 		@polling_timer.cancel unless @polling_timer.nil?
 	end
 	
@@ -246,7 +251,6 @@ class NecLcd < Control::Device
 	
 
 	def do_poll
-		power_on?
 		power_on_delay
 		video_input
 		audio_input
@@ -348,7 +352,7 @@ class NecLcd < Control::Device
 				type = args[0]
 			end
 			message = OPERATION_CODE[command]
-			send_checksum(type, message)	# Status polling is a low priority
+			send_checksum(type, message, {:priority => 99})	# Status polling is a low priority
 		end
 	end
 
