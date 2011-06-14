@@ -132,9 +132,14 @@ class Communicator
 			@status_register[mod][status].delete(interface)
 			@connected_interfaces[interface].delete(@status_register[mod][status]) unless @connected_interfaces[interface].nil?
 
-			if @status_register[mod][status].empty?
-				mod.delete_observer(self)
-			end
+			#
+			# TODO:: deleteing the observer will delete all status updates
+			#	This needs to be more selective.
+			#	We only delete the observer if all the mod[status]'s are empty
+			#
+			#if @status_register[mod][status].empty?
+			#	mod.delete_observer(self)
+			#end
 		}
 	rescue => e
 		logger.warn "-- in communicator.rb, unregister : #{interface.class} called unregister when it was not needed --"
