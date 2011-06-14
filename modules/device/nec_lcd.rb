@@ -17,7 +17,6 @@ class NecLcd < Control::Device
 	end
 	
 	def connected
-		power_on?
 		do_poll
 	
 		@polling_timer = periodic_timer(30) do
@@ -42,16 +41,23 @@ class NecLcd < Control::Device
 		message = "C203D6"
 		
 		if [On, "on", :on].include?(state)
-			message += "0001"	# Power On
-			self[:power_target] = On
-			logger.debug "-- NEC LCD, requested to power on"
+			#self[:power_target] = On
+			if !self[:power]
+				message += "0001"	# Power On
+				send_checksum(:command, message)
+				
+				self[:warming] = true
+				logger.debug "-- NEC LCD, requested to power on"
+			end
 		else
-			message += "0004"	# Power Off
-			self[:power_target] = Off
-			logger.debug "-- NEC LCD, requested to power off"
+			#self[:power_target] = Off
+			if self[:power]
+				message += "0004"	# Power Off
+				send_checksum(:command, message)
+				
+				logger.debug "-- NEC LCD, requested to power off"
+			end
 		end
-		
-		send_checksum(:command, message)
 	end
 	
 	def power_on?
@@ -85,13 +91,13 @@ class NecLcd < Control::Device
 		input = input.to_sym if input.class == String
 		#self[:target_input] = input
 		
-		logger.debug "-- NEC LCD, requested to switch to: #{input}"
-		
 		type = :set_parameter
 		message = OPERATION_CODE[:video_input]
 		message += INPUTS[input].to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
 		send_checksum(type, message)
+		
+		logger.debug "-- NEC LCD, requested to switch to: #{input}"
 	end
 	
 	AUDIO = {
@@ -106,13 +112,13 @@ class NecLcd < Control::Device
 		input = input.to_sym if input.class == String
 		#self[:target_audio] = input
 		
-		logger.debug "-- NEC LCD, requested to switch audio to: #{input}"
-		
 		type = :set_parameter
 		message = OPERATION_CODE[:audio_input]
 		message += AUDIO[input].to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
 		send_checksum(type, message)
+		
+		logger.debug "-- NEC LCD, requested to switch audio to: #{input}"
 	end
 	
 	
@@ -164,24 +170,26 @@ class NecLcd < Control::Device
 		volume_status
 		send_checksum(:set_parameter, message)
 		send_checksum(:command, '0C')	# Save the settings
+		
+		self[:audio_mute] = false	# audio is unmuted when the volume is set
 	end
 	
 	def mute
-		logger.debug "-- NEC LCD, requested to mute audio"
-		
 		message = OPERATION_CODE[:mute_status]
 		message += "0001"	# Value of input as a hex string
 		
 		send_checksum(:set_parameter, message)
+		
+		logger.debug "-- NEC LCD, requested to mute audio"
 	end
 	
 	def unmute
-		logger.debug "-- NEC LCD, requested to unmute audio"
-
 		message = OPERATION_CODE[:mute_status]
 		message += "0000"	# Value of input as a hex string
 		
 		send_checksum(:set_parameter, message)
+		
+		logger.debug "-- NEC LCD, requested to unmute audio"
 	end
 	
 
@@ -209,7 +217,7 @@ class NecLcd < Control::Device
 					if data[8..9] == "00"
 						self[:power] = data[19] == '1'
 						if self[:power]
-							power_on_delay	# wait until the screen has turned on before sending commands
+							power_on_delay(0)	# wait until the screen has turned on before sending commands (0 == high priority)
 						end
 					else
 						logger.info "-- NEC LCD, command failed: #{array_to_str(last_command)}"
@@ -219,11 +227,11 @@ class NecLcd < Control::Device
 				elsif data[10..13] == "00D6"	# Power status response
 					if data[10..11] == "00"
 						self[:power] = data[23] == '1'		# Value == 1
-						if self[:power_target].nil?
-							self[:power_target] = self[:power]
-						elsif self[:power_target] != self[:power]
-							power(self[:power_target])
-						end
+						#if self[:power_target].nil?
+						#	self[:power_target] = self[:power]
+						#elsif self[:power_target] != self[:power]
+						#	power(self[:power_target])
+						#end
 					else
 						logger.info "-- NEC LCD, command failed: #{array_to_str(last_command)}"
 						logger.info "-- NEC LCD, response was: #{data}"
@@ -237,7 +245,7 @@ class NecLcd < Control::Device
 					parse_response(data)
 				elsif data[8..9] == 'BE'	# Wait response
 					sleep(2)
-					send(last_command)
+					send(last_command)	# checksum already added
 					logger.debug "-- NEC LCD, response was a wait command"
 				else
 					logger.info "-- NEC LCD, get or set failed: #{array_to_str(last_command)}"
@@ -246,18 +254,19 @@ class NecLcd < Control::Device
 				end
 		end
 		
-		return true # As monitor may inform us about other status events
+		return true # Command success
 	end
 	
 
 	def do_poll
+		power_on?	# The only high priority status query
 		power_on_delay
 		video_input
 		audio_input
+		mute_status
 		volume_status
 		brightness_status
 		contrast_status
-		mute_status
 	end
 
 
@@ -283,7 +292,9 @@ class NecLcd < Control::Device
 				
 			when :volume_status
 				self[:volume_max] = max
-				self[:volume] = value
+				if not self[:audio_mute]
+					self[:volume] = value
+				end
 				
 			when :brightness_status
 				self[:brightness_max] = max
@@ -294,7 +305,12 @@ class NecLcd < Control::Device
 				self[:contrast] = value
 				
 			when :mute_status
-				self[:audio_mute] = value == 1				
+				self[:audio_mute] = value == 1
+				if(value == 1)
+					self[:volume] = 0
+				else
+					volume_status(0)	# high priority
+				end
 				
 			when :power_on_delay
 				self[:warming_remaining] = value
@@ -346,13 +362,12 @@ class NecLcd < Control::Device
 	#
 	OPERATION_CODE.each_key do |command|
 		define_method command do |*args|
-			if args[0].nil? 
-				type = :get_parameter
-			else
-				type = args[0]
+			priority = 99
+			if args.length > 0
+				priority = args[0]
 			end
 			message = OPERATION_CODE[command]
-			send_checksum(type, message, {:priority => 99})	# Status polling is a low priority
+			send_checksum(:get_parameter, message, {:priority => priority})	# Status polling is a low priority
 		end
 	end
 

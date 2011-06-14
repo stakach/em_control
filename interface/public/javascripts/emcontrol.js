@@ -37,7 +37,7 @@ var EventsDispatcher = function (url, calls) {
 		if (!(calls instanceof Object))
 			return;
 		$.extend(system_calls, calls);
-	}
+	};
 
 	var send = function (command_name, arguments) {
 		if (arguments === undefined) {
@@ -70,6 +70,10 @@ var EventsDispatcher = function (url, calls) {
 
 	this.unbind = function (event_name) {
 		delete callbacks[event_name];
+
+		if (conn.readyState == conn.OPEN)
+			send("unregister", event_name.split('.'));
+
 		return this; // chainable
 	};
 
@@ -81,13 +85,10 @@ var EventsDispatcher = function (url, calls) {
 				chain[i](message);
 			} catch (err) { } // Catch any user code errors
 		}
-	}
+	};
 
-	//
-	// TODO:: implement unbind!!
-	//
 	function setup_connection() {
-		conn = new WebSocket(the_url);
+		conn = new WebSocket(the_url); // This will fail completely if an iphone is put to sleep
 
 		// dispatch to the right handlers
 		conn.onmessage = function (evt) {
@@ -128,4 +129,16 @@ var EventsDispatcher = function (url, calls) {
 		}
 	}
 	setup_connection();
+
+
+	//
+	// Ensure the connection is resumed.
+	//	This is for mobile devices when resumed from sleep to ensure connection
+	//
+	function checkResume() {
+		if (conn.readyState == conn.CLOSED) {
+			setup_connection();
+		}
+	}
+	window.setInterval(checkResume, 1000);
 };
