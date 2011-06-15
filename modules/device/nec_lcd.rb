@@ -45,8 +45,8 @@ class NecLcd < Control::Device
 			if !self[:power]
 				message += "0001"	# Power On
 				send_checksum(:command, message)
-				
 				self[:warming] = true
+				self[:power] = On
 				logger.debug "-- NEC LCD, requested to power on"
 			end
 		else
@@ -55,9 +55,13 @@ class NecLcd < Control::Device
 				message += "0004"	# Power Off
 				send_checksum(:command, message)
 				
+				self[:power] = Off
 				logger.debug "-- NEC LCD, requested to power off"
 			end
 		end
+		
+		mute_status(0)
+		volume_status(0)
 	end
 	
 	def power_on?
@@ -96,7 +100,9 @@ class NecLcd < Control::Device
 		message += INPUTS[input].to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
 		send_checksum(type, message)
-		
+		brightness_status(10)		# higher status than polling commands - lower than input switching
+		contrast_status(10)
+
 		logger.debug "-- NEC LCD, requested to switch to: #{input}"
 	end
 	
@@ -117,6 +123,8 @@ class NecLcd < Control::Device
 		message += AUDIO[input].to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
 		send_checksum(type, message)
+		mute_status(10)		# higher status than polling commands - lower than input switching
+		volume_status(10)
 		
 		logger.debug "-- NEC LCD, requested to switch audio to: #{input}"
 	end
@@ -215,10 +223,7 @@ class NecLcd < Control::Device
 				#	8..9 == "00" means no error 
 				if data[10..15] == "C203D6"	# Means power comamnd
 					if data[8..9] == "00"
-						self[:power] = data[19] == '1'
-						if self[:power]
-							power_on_delay(0)	# wait until the screen has turned on before sending commands (0 == high priority)
-						end
+						power_on_delay(0)	# wait until the screen has turned on before sending commands (0 == high priority)
 					else
 						logger.info "-- NEC LCD, command failed: #{array_to_str(last_command)}"
 						logger.info "-- NEC LCD, response was: #{data}"
@@ -226,7 +231,7 @@ class NecLcd < Control::Device
 					end
 				elsif data[10..13] == "00D6"	# Power status response
 					if data[10..11] == "00"
-						self[:power] = data[23] == '1'		# Value == 1
+						self[:power] = data[23] == '1'		# On == 1, Off == 4
 						#if self[:power_target].nil?
 						#	self[:power_target] = self[:power]
 						#elsif self[:power_target] != self[:power]
@@ -244,7 +249,6 @@ class NecLcd < Control::Device
 				if data[8..9] == "00"
 					parse_response(data)
 				elsif data[8..9] == 'BE'	# Wait response
-					sleep(2)
 					send(last_command)	# checksum already added
 					logger.debug "-- NEC LCD, response was a wait command"
 				else
@@ -316,10 +320,11 @@ class NecLcd < Control::Device
 				self[:warming_remaining] = value
 				if value > 0
 					self[:warming] = true
-					sleep(2)
 					power_on_delay
 				else
-					self[:warming] = false
+					one_shot(5) do
+						self[:warming] = false	# allow access to the display
+					end
 				end
 			when :auto_setup
 				# auto_setup

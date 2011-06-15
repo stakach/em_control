@@ -18,7 +18,6 @@ class PodControl < Control::Logic
 		#
 		if !system[:Display].power_on?
 			system[:Display].power(On)
-			sleep(4)	# Give it a few seconds to turn on
 		end
 		
 		#
@@ -36,11 +35,6 @@ class PodControl < Control::Logic
 		else
 			system[:Display].switch_audio(:audio2)
 		end
-		
-		#
-		# Contrast and Brighness re-set when the display is switched
-		#
-		system[:Display].do_poll
 	end
 	
 	#
