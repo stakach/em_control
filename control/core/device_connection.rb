@@ -216,7 +216,7 @@ module Control
 			}
 		end
 		
-		def call_connected
+		def call_connected(*args)
 			@status_lock.synchronize {
 				@is_connected = true
 			}
@@ -229,7 +229,7 @@ module Control
 				@parent[:connected] = true
 				return unless @parent.respond_to?(:connected)
 				begin
-					@parent.connected
+					@parent.connected(*args)
 				rescue => e
 					#
 					# save from bad user code (don't want to deplete thread pool)
@@ -339,7 +339,7 @@ module Control
 				end
 				#
 				# If we haven't returned before we reach this point then the last data was
-				#	not relavent and we are still waiting (max wait == num_retries * timeout)
+				#	not relavent or complete (framing) and we are still waiting (max wait == num_retries * timeout)
 				#
 				num_rets -= 1
 			end while num_rets > 0

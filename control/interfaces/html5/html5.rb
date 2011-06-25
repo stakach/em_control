@@ -24,9 +24,9 @@ class HTML5Monitor
 		"unregister" => :unregister
 	}
 
-	def self.register(socket)
+	def self.register(id)
 		@@client_lock.synchronize {
-			@@clients[socket] = HTML5Monitor.new(socket)
+			@@clients[id] = HTML5Monitor.new(id)
 		}
 	end
 	
@@ -153,11 +153,10 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 		# Setup status variable here :)
 		#	We could use a 
 		#
-		id = nil
+		id = socket
 		
 		EM.defer do
-			HTML5Monitor.register(socket)
-			id = socket
+			HTML5Monitor.register(id)
 			Control::System.logger.debug 'HTML5 browser connected'
 		end
 		

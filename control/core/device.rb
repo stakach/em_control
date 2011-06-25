@@ -23,7 +23,6 @@ module Control
 		#
 		def setbase(base)
 			@base = base
-			undef setbase	# Remove this function
 		end
 
 	

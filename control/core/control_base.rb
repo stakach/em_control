@@ -21,67 +21,62 @@ module Control
 			#
 			# EM Callbacks: --------------------------------------------------------
 			#
-			def post_init
-				start_tls if @tls_enabled								# If we are using tls or ssl
-				return unless @parent.respond_to?(:initiate_session)
-				
-				begin
-					@parent.initiate_session(@tls_enabled)
-				rescue => e
-					#
-					# save from bad user code (don't want to deplete thread pool)
-					#
-					EM.defer do
-						@logger.error "-- module #{@parent.class} error whilst calling: initiate_session --"
-						@logger.error e.message
-						@logger.error e.backtrace
-					end
-				end
-			end
-			
-
-			def ssl_handshake_completed
-				call_connected(get_peer_cert)		# this will mark the true connection complete stage for encrypted devices
-			end
+			#def post_init
+			#	return unless @parent.respond_to?(:initiate_session)
+			#	
+			#	begin
+			#		@parent.initiate_session(@tls_enabled)
+			#	rescue => e
+			#		#
+			#		# save from bad user code (don't want to deplete thread pool)
+			#		#
+			#		EM.defer do
+			#			@logger.error "-- module #{@parent.class} error whilst calling: initiate_session --"
+			#			@logger.error e.message
+			#			@logger.error e.backtrace
+			#		end
+			#	end
+			#end
 
 	
 			def connection_completed
 				# set status
-				
 				resume if paused?
-				@status_lock.synchronize {
-					@last_command[:wait] = false if !@last_command[:wait].nil?	# re-start event process
-				}
+				@last_command[:wait] = false if !@last_command[:wait].nil?	# re-start event process
 				@connect_retry = 0
 				
 				if !@tls_enabled
 					call_connected
+				else
+					start_tls
 				end
+			end
+			
+			def ssl_handshake_completed
+				call_connected(get_peer_cert)		# this will mark the true connection complete stage for encrypted devices
 			end
 			
 
 			def unbind
-				@status_lock.synchronize {
-						# set offline
-					@is_connected = false
-				}			
-
-				@task_queue.push lambda {
-					@parent[:connected] = false
-					return unless @parent.respond_to?(:disconnected)
-					begin
-						@parent.disconnected
-					rescue => e
-						#
-						# save from bad user code (don't want to deplete thread pool)
-						#
-						EM.defer do
+				# set offline
+				@is_connected = false
+				
+				EM.defer do
+					@task_queue.push lambda {
+						@parent[:connected] = false
+						return unless @parent.respond_to?(:disconnected)
+						begin
+							@parent.disconnected
+						rescue => e
+							#
+							# save from bad user code (don't want to deplete thread pool)
+							#
 							@logger.error "-- module #{@parent.class} error whilst calling: disconnected --"
 							@logger.error e.message
 							@logger.error e.backtrace
 						end
-					end
-				}
+					}
+				end
 				
 				# attempt re-connect
 				#	if !make and break

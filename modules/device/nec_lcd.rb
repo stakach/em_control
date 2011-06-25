@@ -320,15 +320,17 @@ class NecLcd < Control::Device
 				self[:warming_remaining] = value
 				if value > 0
 					self[:warming] = true
+					sleep(value)		# Prevent any commands being sent until the power on delay is complete
 					power_on_delay
 				else
-					one_shot(5) do
+					one_shot(7) do		# Reactive the interface once the display is online
 						self[:warming] = false	# allow access to the display
 					end
 				end
 			when :auto_setup
 				# auto_setup
 				# nothing needed to do here
+				sleep(3)		
 			else
 				logger.info "-- NEC LCD, unknown response: #{data[10..13]}"
 				logger.info "-- NEC LCD, for command: #{array_to_str(last_command)}"
