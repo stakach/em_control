@@ -1,3 +1,12 @@
+#
+# Settings required:
+#	* in-house-pc (input name)
+#	* audio1 (in-house-pc audio input name)
+#	* laptop1 (input name)
+#	* laptop2 (input name)
+#	* audio2 (laptop1 and 2 audio input name)
+#	* collaboration_page (address of web page to load for collaboration)
+#
 class PodControl < Control::Logic
 
 
@@ -35,6 +44,11 @@ class PodControl < Control::Logic
 		else
 			system[:Display].switch_audio(:audio2)
 		end
+	end
+	
+
+	def start_collaborating
+		system[:Computer].load_page(setting(:collaboration_page))
 	end
 	
 	#

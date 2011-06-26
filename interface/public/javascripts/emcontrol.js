@@ -121,7 +121,6 @@ var EventsDispatcher = function (url, calls) {
 				clearInterval(polling);
 				system_calls.close();
 			}
-			setup_connection();
 		}
 		conn.onopen = function () {
 			connected = true; // prevent multiple disconnect triggers

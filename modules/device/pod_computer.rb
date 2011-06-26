@@ -1,5 +1,11 @@
 require 'json'
 
+#
+# Settings required:
+#	* domain (domain that we will be authenticating against)
+#	* username (username for authentication)
+#	* password (password for authentication)
+#
 class PodComputer < Control::Device
 
 	#
@@ -55,7 +61,7 @@ class PodComputer < Control::Device
 				send(JSON.generate(command))
 			end
 			@authenticated += 1
-			logger.debug "-- COMPUTER, requested authentication: #{command.inspect}"
+			logger.debug "-- COMPUTER, requested authentication"
 		else
 			if !data[:result]
 				logger.debug "-- COMPUTER, request failed for command: #{array_to_str(last_command)}"
