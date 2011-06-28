@@ -96,7 +96,11 @@ module Control
 			Modules.load_lock.synchronize {		# TODO::dangerous (locking on reactor thread)
 				Modules.loading = @instance
 				if !controllerDevice.udp
-					EM.connect controllerDevice.ip, controllerDevice.port, Device::Base
+					begin
+						EM.connect controllerDevice.ip, controllerDevice.port, Device::Base
+					rescue => e
+						System.logger.info e.message + " for #{controllerDevice.dependency.actual_name} @ #{controllerDevice.ip} in #{controllerDevice.controller.name}"
+					end
 				else
 					#
 					# Load UDP device here
