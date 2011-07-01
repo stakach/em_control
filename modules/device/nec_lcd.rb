@@ -1,3 +1,34 @@
+# :title:All NEC Control Module
+#
+# Controls all LCD displays as of 1/07/2011
+# Status information avaliable:
+# -----------------------------
+#
+# (built in)
+# connected
+#
+# (module defined)
+# power
+# warming
+#
+# volume
+# volume_min == 0
+# volume_max
+#
+# brightness
+# brightness_min == 0
+# brightness_max
+#
+# contrast
+# contrast_min = 0
+# contrast_max
+# 
+# audio_mute
+# 
+# input (video input)
+# audio (audio input)
+#
+#
 class NecLcd < Control::Device
 
 	#
@@ -6,7 +37,7 @@ class NecLcd < Control::Device
 	#	not have access to settings and this is called
 	#	soon afterwards
 	#
-	def onLoad
+	def on_load
 		#
 		# Setup constants
 		#
@@ -31,6 +62,10 @@ class NecLcd < Control::Device
 		#	Hence the check if timer is nil here
 		#
 		@polling_timer.cancel unless @polling_timer.nil?
+	end
+	
+	def response_delimiter
+		"\r"	# Used to interpret the end of a message (this is why data values are encoded as ASCII)
 	end
 	
 
@@ -317,7 +352,6 @@ class NecLcd < Control::Device
 				end
 				
 			when :power_on_delay
-				self[:warming_remaining] = value
 				if value > 0
 					self[:warming] = true
 					sleep(value)		# Prevent any commands being sent until the power on delay is complete
@@ -381,10 +415,14 @@ class NecLcd < Control::Device
 
 	def check_checksum(data)
 		check = 0
-		data[1..-3].each do |byte|	# Loop through the second to the third last element
+		#
+		# Loop through the second to the second last element
+		#	Delimiter is removed automatically
+		#
+		data[1..-2].each do |byte|
 			check = check ^ byte
 		end
-		return check == data[-2]	# Check the check sum equals the second last element
+		return check == data[-1]	# Check the check sum equals the last element
 	end
 	
 

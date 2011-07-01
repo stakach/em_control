@@ -113,11 +113,11 @@ module Control
 				end
 			}
 			
-			if @instance.respond_to?(:onLoad)
+			if @instance.respond_to?(:on_load)
 				begin
-					@instance.onLoad
+					@instance.on_load
 				rescue => e
-					System.logger.error "-- device module #{@instance.class} error whilst calling: onLoad --"
+					System.logger.error "-- device module #{@instance.class} error whilst calling: on_load --"
 					System.logger.error e.message
 					System.logger.error e.backtrace
 				end
@@ -166,11 +166,11 @@ module Control
 			end
 			@instance = Modules[controllerLogic.dependency_id].new(System.controllers[controllerLogic.controller_id])
 			@@lookup[@instance] = controllerLogic
-			if @instance.respond_to?(:onLoad)
+			if @instance.respond_to?(:on_load)
 				begin
-					@instance.onLoad
+					@instance.on_load
 				rescue => e
-					System.logger.error "-- logic module #{@instance.class} error whilst calling: onLoad --"
+					System.logger.error "-- logic module #{@instance.class} error whilst calling: on_load --"
 					System.logger.error e.message
 					System.logger.error e.backtrace
 				end

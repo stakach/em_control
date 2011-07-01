@@ -60,6 +60,7 @@ module Control
 			def unbind
 				# set offline
 				@is_connected = false
+				@buf = nil	# Any data in from TCP stream is now invalid
 				
 				EM.defer do
 					@task_queue.push lambda {
@@ -104,9 +105,7 @@ module Control
 			end
 			
 			def receive_data(data)
-				EM.defer do
-					do_receive_data(data)
-				end
+				do_receive_data(data)
 			end
 			
 			def do_send_data(data)

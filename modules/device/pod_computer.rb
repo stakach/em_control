@@ -6,6 +6,9 @@ require 'json'
 #	* username (username for authentication)
 #	* password (password for authentication)
 #
+# (built in)
+# connected
+#
 class PodComputer < Control::Device
 
 	#
@@ -14,7 +17,7 @@ class PodComputer < Control::Device
 	#	not have access to settings and this is called
 	#	soon afterwards
 	#
-	def onLoad
+	def on_load
 		#
 		# Setup constants
 		#

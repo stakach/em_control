@@ -1,5 +1,5 @@
 #
-# Settings required:
+# (Settings)
 #	* in-house-pc (input name)
 #	* audio1 (in-house-pc audio input name)
 #	* laptop1 (input name)
@@ -7,10 +7,13 @@
 #	* audio2 (laptop1 and 2 audio input name)
 #	* collaboration_page (address of web page to load for collaboration)
 #
+# (module defined)
+# input
+#
 class PodControl < Control::Logic
 
 
-	def onLoad
+	def on_load
 		#
 		# Setup constants
 		#

@@ -25,8 +25,7 @@ class ServerlinkPdu < Control::Device
 	#
 	# Sets up any constants 
 	#
-	def initialize *args
-		super	# Must be called
+	def on_load
 		
 		#
 		# Setup constants

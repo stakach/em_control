@@ -34,7 +34,7 @@ require File.dirname(__FILE__) + '/control/interfaces/deferred.rb'
 require File.dirname(__FILE__) + '/control/core/system.rb'
 require File.dirname(__FILE__) + '/control/core/device_connection.rb'
 require File.dirname(__FILE__) + '/control/core/datagram_server.rb'
-require File.dirname(__FILE__) + '/control/core/control_base.rb'
+require File.dirname(__FILE__) + '/control/core/tcp_control.rb'
 
 
 

@@ -17,8 +17,7 @@
 
 class KramerSwitch < Control::Device
 
-	def initialize *args
-		super	# Must be called
+	def on_load
 		
 		#
 		# Setup constants

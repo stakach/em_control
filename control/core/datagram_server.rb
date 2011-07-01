@@ -21,7 +21,6 @@ module Control
 			end
 			
 			$datagramServer = self
-			@data_lock = Mutex.new
 			@devices = {}
 			
 			EM.defer do
@@ -40,16 +39,12 @@ module Control
 			#	Differenciate by inspecting the size
 			#
 			ip = get_peername[2,6].unpack "nC4"
-			EM.defer do
-				begin
-					@data_lock.synchronize {
-						@devices["#{ip[1..-1].join(".")}:#{ip[0]}"].do_receive_data(data)
-					}
-				rescue
-					#
-					# TODO:: add error messages
-					#
-				end
+			begin
+				@devices["#{ip[1..-1].join(".")}:#{ip[0]}"].do_receive_data(data)
+			rescue
+				#
+				# TODO:: error messages here if device is null ect
+				#
 			end
 		end
 		
@@ -63,18 +58,14 @@ module Control
 		end
 
 		def add_device(scheme, device)
-			EM.defer do
-				@data_lock.synchronize {
-					@devices["#{scheme.ip}:#{scheme.port}"] = device
-				}
+			EM.schedule do
+				@devices["#{scheme.ip}:#{scheme.port}"] = device
 			end
 		end
 		
 		def remove_device(scheme)
-			EM.defer do
-				@data_lock.synchronize {
-					@devices.delete("#{scheme.ip}:#{scheme.port}")
-				}
+			EM.schedule do
+				@devices.delete("#{scheme.ip}:#{scheme.port}")
 			end
 		end
 	end

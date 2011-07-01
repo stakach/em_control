@@ -14,7 +14,8 @@ module Control
 				:retries => 2,
 				:hex_string => false,
 				:timeout => 5,
-				:priority => 0
+				:priority => 0,
+				:max_buffer => 1048576	# 1mb
 			}
 
 			@receive_queue = Queue.new	# So we can process responses in different ways
@@ -241,8 +242,48 @@ module Control
 			}
 		end
 		
+		#
+		# Data recieved
+		#	Allow modules to set message delimiters for auto-buffering
+		#	Default max buffer length == 1mb (setting can be overwritten)
+		#
 		def do_receive_data(data)
-			@receive_queue.push(data)	# For processing on the send queue if the thread is locked
+			if @parent.respond_to?(:delimiter)
+				begin
+					@buf ||= BufferedTokenizer.new(build_delimiter, @default_send_options[:max_buffer])    # Call back for character
+					result = @buf.extract(data)
+					EM.defer do
+						result.each do |line|
+							@receive_queue.push(line)
+						end
+					end
+					return	# Prevent fall through (on error we will add the data to the recieve queue)
+				rescue => e
+					EM.defer do
+						@logger.error "-- module #{@parent.class} error whilst setting delimiter --"
+						@logger.error e.message
+						@logger.error e.backtrace
+					end
+				end
+			end
+				
+			EM.defer do
+				@receive_queue.push(data)
+			end
+		end
+		
+		def build_delimiter
+			#
+			# Delimiter can be a byte array, string or regular expression
+			#
+			del = @parent.response_delimiter
+			case del.class
+				when Array
+					del = array_to_str(del)
+				when Fixnum
+					del = array_to_str([del & 0xFF])
+			end
+			return del
 		end
 		
 		#
