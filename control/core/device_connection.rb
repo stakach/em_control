@@ -248,7 +248,7 @@ module Control
 		#	Default max buffer length == 1mb (setting can be overwritten)
 		#
 		def do_receive_data(data)
-			if @parent.respond_to?(:delimiter)
+			if @parent.respond_to?(:response_delimiter)
 				begin
 					@buf ||= BufferedTokenizer.new(build_delimiter, @default_send_options[:max_buffer])    # Call back for character
 					result = @buf.extract(data)
