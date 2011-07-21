@@ -84,8 +84,17 @@ module Control
 				settings = DeviceModule.lookup[@parent]
 				
 				if @connect_retry == 0
-					reconnect settings.ip, settings.port
-					@connect_retry = 1
+					begin
+						reconnect Addrinfo.tcp(settings.ip, 80).ip_address, settings.port
+						@connect_retry = 1
+					rescue
+						@connect_retry = 2
+						EM.defer do
+							@logger.info "-- module #{@parent.class} in em_control.rb, unbind --"
+							@logger.info "Reconnect failed for #{settings.ip}:#{settings.port}"
+						end
+						do_reconnect(settings)
+					end
 				else
 					@connect_retry += 1
 					#
@@ -98,10 +107,18 @@ module Control
 						end
 					end		
 	
-					EM.add_timer 5, proc { 
-						reconnect settings.ip, settings.port
-					}
+					do_reconnect(settings)
 				end
+			end
+			
+			def do_reconnect(settings)
+				EM.add_timer 5, proc { 
+					begin
+						reconnect Addrinfo.tcp(settings.ip, 80).ip_address, settings.port
+					rescue
+						do_reconnect
+					end
+				}
 			end
 			
 			def receive_data(data)

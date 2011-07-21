@@ -5,6 +5,7 @@ require 'observer'
 require 'yaml'
 require 'thread'
 require 'monitor'
+require 'Socket'	# for DNS lookups (EM isn't every good at this)
 
 
 

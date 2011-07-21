@@ -97,7 +97,7 @@ module Control
 				Modules.loading = @instance
 				if !controllerDevice.udp
 					begin
-						EM.connect controllerDevice.ip, controllerDevice.port, Device::Base
+						EM.connect Addrinfo.tcp(controllerDevice.ip, 80).ip_address, controllerDevice.port, Device::Base
 					rescue => e
 						System.logger.info e.message + " for #{controllerDevice.dependency.actual_name} @ #{controllerDevice.ip} in #{controllerDevice.controller.name}"
 					end

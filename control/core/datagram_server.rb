@@ -22,6 +22,7 @@ module Control
 			
 			$datagramServer = self
 			@devices = {}
+			@ips = {}
 			
 			EM.defer do
 				System.logger.info 'running datagram server on an ephemeral port'
@@ -54,18 +55,43 @@ module Control
 		#	TODO:: add debug information
 		#
 		def do_send_data(scheme, data)
-			send_datagram(data, scheme.ip, scheme.port)
+			begin
+				#
+				# Just in case the address is a domain name we want to ensure the
+				#	IP lookups are always correct and we are always sending to the
+				#	specified device
+				#
+				ip = Addrinfo.tcp(scheme.ip, 80).ip_address
+				text = "#{scheme.ip}:#{scheme.port}"
+				old_ip = @ips[text]
+				if old_ip != ip
+					device = @devices.delete("#{old_ip}:#{scheme.port}")
+					@ips[text] = ip
+					@devices["#{ip}:#{scheme.port}"] = device
+				end
+				send_datagram(data, ip, scheme.port)
+			rescue
+			end
 		end
 
 		def add_device(scheme, device)
 			EM.schedule do
-				@devices["#{scheme.ip}:#{scheme.port}"] = device
+				begin
+					ip = Addrinfo.tcp(scheme.ip, 80).ip_address
+					@devices["#{ip}:#{scheme.port}"] = device
+					@ips["#{scheme.ip}:#{scheme.port}"] = ip
+				rescue
+				end
 			end
 		end
 		
 		def remove_device(scheme)
 			EM.schedule do
-				@devices.delete("#{scheme.ip}:#{scheme.port}")
+				begin
+					ip = @ips.delete("#{scheme.ip}:#{scheme.port}")
+					@devices.delete("#{ip}:#{scheme.port}")
+				rescue
+				end
 			end
 		end
 	end
