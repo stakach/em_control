@@ -48,7 +48,20 @@ module Control
 				if !@tls_enabled
 					call_connected
 				else
-					start_tls
+					if !@parent.respond_to?(:certificates)
+						start_tls
+					else
+						begin
+							certs = @parent.certificates
+							start_tls(certs)
+						rescue => e
+							EM.defer do
+								@logger.error "-- module #{@parent.class} error whilst starting TLS with certificates --"
+								@logger.error e.message
+								@logger.error e.backtrace
+							end
+						end
+					end
 				end
 			end
 			
