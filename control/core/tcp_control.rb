@@ -116,7 +116,7 @@ module Control
 					begin
 						reconnect Addrinfo.tcp(settings.ip, 80).ip_address, settings.port
 					rescue
-						do_reconnect
+						do_reconnect(settings)
 					end
 				}
 			end

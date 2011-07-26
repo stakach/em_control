@@ -52,7 +52,6 @@ module Control
 
 		#
 		# Additional controls
-		#	TODO:: add debug information
 		#
 		def do_send_data(scheme, data)
 			begin
@@ -65,12 +64,17 @@ module Control
 				text = "#{scheme.ip}:#{scheme.port}"
 				old_ip = @ips[text]
 				if old_ip != ip
-					device = @devices.delete("#{old_ip}:#{scheme.port}")
-					@ips[text] = ip
-					@devices["#{ip}:#{scheme.port}"] = device
+					EM.schedule do	# All modifications are on the reactor thread instead of locking
+						device = @devices.delete("#{old_ip}:#{scheme.port}")
+						@ips[text] = ip
+						@devices["#{ip}:#{scheme.port}"] = device
+					end
 				end
 				send_datagram(data, ip, scheme.port)
-			rescue
+			rescue => e
+				EM.defer do
+					System.logger.info e.message + " calling UDP send for #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.controller.name}"
+				end
 			end
 		end
 
@@ -80,7 +84,13 @@ module Control
 					ip = Addrinfo.tcp(scheme.ip, 80).ip_address
 					@devices["#{ip}:#{scheme.port}"] = device
 					@ips["#{scheme.ip}:#{scheme.port}"] = ip
-				rescue
+				rescue => e
+					@devices["#{scheme.ip}:#{scheme.port}"] = device
+					@ips["#{scheme.ip}:#{scheme.port}"] = scheme.ip
+					
+					EM.defer do
+						System.logger.info e.message + " adding UDP #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.controller.name}"
+					end
 				end
 			end
 		end
@@ -91,6 +101,7 @@ module Control
 					ip = @ips.delete("#{scheme.ip}:#{scheme.port}")
 					@devices.delete("#{ip}:#{scheme.port}")
 				rescue
+					System.logger.info e.message + " removing UDP #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.controller.name}"
 				end
 			end
 		end

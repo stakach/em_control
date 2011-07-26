@@ -99,7 +99,8 @@ module Control
 					begin
 						EM.connect Addrinfo.tcp(controllerDevice.ip, 80).ip_address, controllerDevice.port, Device::Base
 					rescue => e
-						System.logger.info e.message + " for #{controllerDevice.dependency.actual_name} @ #{controllerDevice.ip} in #{controllerDevice.controller.name}"
+						System.logger.info e.message + " connecting to #{controllerDevice.dependency.actual_name} @ #{controllerDevice.ip} in #{controllerDevice.controller.name}"
+						EM.connect "127.0.0.1", 10, Device::Base	# Connect to a nothing port until the device name is found or updated
 					end
 				else
 					#
