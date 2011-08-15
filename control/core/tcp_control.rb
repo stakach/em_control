@@ -94,7 +94,19 @@ module Control
 				
 				# attempt re-connect
 				#	if !make and break
-				settings = DeviceModule.lookup[@parent]
+				begin
+					settings = DeviceModule.lookup[@parent].reload
+				rescue
+					EM.defer do
+						@logger.fatal "-- module #{@parent.class} in em_control.rb, unbind --"
+						@logger.fatal "Settings reload failed. Device going offline."
+					end
+					#
+					# TODO:: Unload the module here
+					#	Potential refactor of module manager required, less reliance on IP addresses
+					#
+					return	# Do not attempt to reconnect this device!
+				end
 				
 				if @connect_retry == 0
 					begin

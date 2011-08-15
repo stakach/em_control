@@ -38,6 +38,30 @@ class PodComputer < Control::Device
 	end
 	
 
+
+	#
+	# Camera controls
+	#
+	CAM_OPERATIONS = [:up, :down, :left, :right, :center, :zoomin, :zoomout]
+	
+	#
+	# Automatically creates a callable function for each command
+	#	http://blog.jayfields.com/2007/10/ruby-defining-class-methods.html
+	#	http://blog.jayfields.com/2008/02/ruby-dynamically-define-method.html
+	#
+	CAM_OPERATIONS.each do |command|
+		define_method command do |*args|
+			command = {:control => "cam", :command => command.to_s, :args => []}
+			send(JSON.generate(command), {:priority => 99})	# Cam control is low priority in case a camera is not plugged in
+		end
+	end
+	
+	def zoom(val)
+		command = {:control => "cam", :command => "zoom", :args => [val.to_s]}
+		send(JSON.generate(command))
+	end
+
+
 	#
 	# Computer Response
 	#
@@ -45,6 +69,7 @@ class PodComputer < Control::Device
 		data = array_to_str(data)
 		begin
 			data = JSON.parse(data, {:symbolize_names => true})
+			logger.debug "-- COMPUTER, sent: #{data.inspect}"
 		rescue
 			#
 			# C# Code seems to be leaving a little bit of data for me to trip over
@@ -65,6 +90,8 @@ class PodComputer < Control::Device
 			end
 			@authenticated += 1
 			logger.debug "-- COMPUTER, requested authentication"
+		elsif data[:type] != nil
+			self[data[:type].to_sym] = data[:data]	# zoom, tilt, pan
 		else
 			if !data[:result]
 				logger.debug "-- COMPUTER, request failed for command: #{array_to_str(last_command)}"
