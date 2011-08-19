@@ -12,34 +12,69 @@
 
 ActiveRecord::Schema.define(:version => 20110507032735) do
 
-  create_table "controller_devices", :force => true do |t|
-    t.integer "controller_id"
-    t.integer "dependency_id"
-    t.string  "ip"
+  create_table "auth_sources", :force => true do |t|
+    t.string  "type"
+    t.string  "name"
+    t.string  "host"
     t.integer "port"
-    t.boolean "tls",           :default => false
-    t.boolean "udp",           :default => false
-    t.integer "priority",      :default => 0
+    t.string  "account"
+    t.string  "account_password"
+    t.string  "base_dn"
+    t.string  "attr_login"
+    t.string  "attr_firstname"
+    t.string  "attr_lastname"
+    t.string  "attr_mail"
+    t.string  "attr_member"
+    t.boolean "tls"
+  end
+
+  create_table "controller_devices", :force => true do |t|
+    t.integer  "controller_id"
+    t.integer  "dependency_id"
+    t.string   "ip"
+    t.integer  "port"
+    t.boolean  "tls",           :default => false
+    t.boolean  "udp",           :default => false
+    t.integer  "priority",      :default => 0
+    t.datetime "created_at"
+    t.datetime "updated_at"
   end
 
   create_table "controller_logics", :force => true do |t|
-    t.integer "controller_id"
-    t.integer "dependency_id"
+    t.integer  "controller_id"
+    t.integer  "dependency_id"
+    t.integer  "priority",      :default => 0
+    t.datetime "created_at"
+    t.datetime "updated_at"
   end
 
   create_table "controllers", :force => true do |t|
-    t.string  "name"
-    t.text    "description"
-    t.boolean "active",      :default => true
+    t.string   "name"
+    t.text     "description"
+    t.boolean  "active",      :default => true
+    t.datetime "created_at"
+    t.datetime "updated_at"
   end
 
   create_table "dependencies", :force => true do |t|
-    t.integer "dependency_id"
-    t.string  "classname"
-    t.string  "filename"
-    t.string  "module_name"
-    t.string  "actual_name"
-    t.text    "description"
+    t.integer  "dependency_id"
+    t.string   "classname"
+    t.string   "filename"
+    t.string   "module_name"
+    t.string   "actual_name"
+    t.text     "description"
+    t.datetime "version_loaded"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  create_table "guis", :force => true do |t|
+    t.string   "name"
+    t.text     "description"
+    t.integer  "security_level"
+    t.datetime "version"
+    t.datetime "created_at"
+    t.datetime "updated_at"
   end
 
   create_table "settings", :force => true do |t|
@@ -52,6 +87,29 @@ ActiveRecord::Schema.define(:version => 20110507032735) do
     t.integer  "integer_value"
     t.text     "text_value"
     t.datetime "datetime_value"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  create_table "trusted_devices", :force => true do |t|
+    t.integer  "user_id"
+    t.integer  "controller_id"
+    t.string   "description"
+    t.text     "notes"
+    t.string   "one_time_key"
+    t.datetime "expires"
+    t.datetime "last_authenticated"
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  create_table "users", :force => true do |t|
+    t.integer  "auth_source_id"
+    t.string   "identifier"
+    t.text     "description"
+    t.integer  "security_level", :default => 0
+    t.datetime "created_at"
+    t.datetime "updated_at"
   end
 
 end

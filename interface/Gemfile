@@ -1,16 +1,17 @@
 source 'http://rubygems.org'
 
-gem 'rails', '3.0.7'
+gem 'rails'
 
 # Bundle edge Rails instead:
 # gem 'rails', :git => 'git://github.com/rails/rails.git'
 
-gem 'sqlite3'
+#gem 'sqlite3'
+gem 'pg'
 gem 'eventmachine'
 gem 'em-websocket'
 gem 'json'
 gem 'log4r'
-gem 'algorithms'
+#gem 'algorithms'
 
 
 # Use unicorn as the web server

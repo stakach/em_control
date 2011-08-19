@@ -1,10 +1,14 @@
 # SQLite version 3.x
 #   gem install sqlite3
 development:
-  adapter: sqlite3
-  database: db/development.sqlite3
+  adapter: postgresql
+#  adapter: jdbcpostgresql
+  encoding: utf8
+  template: template0
+  database: control
   pool: 5
-  timeout: 5000
+  username: rails
+  password: devpassword
 
 # Warning: The database defined as "test" will be erased and
 # re-generated from your development database when you run "rake".
