@@ -83,13 +83,12 @@ class Initial < ActiveRecord::Migration
 		create_table :guis do |t|
 			t.string	:name,	:allow_null => false
 			t.text		:description
-			t.integer	:security_level
 			
-			t.datetime	:version	# Cache update indicator
+			t.datetime	:version		# Cache update indicator
+			t.text		:render_path	# Path of file to render
 			
 			# Location information here for
 			# access if the device is local
-			# May also require a password if security level is set
 			
 			t.timestamps
 		end
@@ -119,7 +118,37 @@ class Initial < ActiveRecord::Migration
 			t.string	:identifier,	:allow_null => false
 			t.text		:description
 			
-			t.integer	:security_level,:default => 0
+			t.integer	:privilege_map,	:allow_null => false,	:default => 1		# 0 == inactive, 1 == base level access (can log into UI)
+			t.boolean	:system_admin,	:allow_null => false,	:default => false	# Access to everything. Privilege map still stands
+			
+			t.timestamps
+		end
+		
+		#
+		# Zones can be used to classify the various control systems
+		# => General Type (meeting room, seminar room)
+		# => Floor, Building, Campus
+		# This allows fine grained access control for users
+		#
+		create_table :zones do |t|
+			t.string	:name,	:allow_null => false
+			t.text		:description
+			
+			t.timestamps
+		end
+		
+		create_table :user_zones do |t|
+			t.references :user
+			t.references :zone
+			
+			t.integer	:privilege_map	# if not null overrides user default privilege map (user zones OR'ed)
+			
+			t.timestamps
+		end
+		
+		create_table :controller_zones do |t|
+			t.references :controller
+			t.references :zone
 			
 			t.timestamps
 		end
@@ -132,6 +161,7 @@ class Initial < ActiveRecord::Migration
 			t.references	:user,			:allow_null => false
 			t.references	:controller,	:allow_null => false
 			
+			t.string	:trusted_by,		:allow_null => false
 			t.string	:description,		:allow_null => false
 			t.text		:notes
 			
