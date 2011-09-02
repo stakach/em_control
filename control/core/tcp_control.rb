@@ -1,5 +1,3 @@
-require 'algorithms'
-
 module Control
 
 	class Device
