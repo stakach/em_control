@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Cloud Control</title>
+
+		<!--
+			CSS
+		-->
+		<%= stylesheet_link_tag params[:controller] %>
+		
+		<!--
+			Javascripts
+		-->
+		<%= javascript_include_tag params[:controller] %>
+	</head>
+	
+	<body>
+		<div id="admin_box">
+			<h1>Login</h1>
+			<div>
+				<%= yield %>
+			</div>
+		</div>
+	</body>
+</html>
