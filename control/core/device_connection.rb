@@ -9,11 +9,12 @@ module Control
 			super
 		
 			@default_send_options = {	
-				:wait => true,
+				:wait => true,			# Wait for response
+				:delay => 0,			# Delay next send by x.y seconds
 				:max_waits => 3,
 				:retries => 2,
 				:hex_string => false,
-				:timeout => 5,
+				:timeout => 5,			# Timeout in seconds
 				:priority => 0,
 				:max_buffer => 1048576	# 1mb
 			}
@@ -25,12 +26,15 @@ module Control
 			@pri_queue = PriorityQueue.new		# high priority
 			@send_queue = PriorityQueue.new		# regular priority
 			@send_queue.extend(MonitorMixin)
+			@last_send_at = 0.0
 
 			@receive_lock = Mutex.new	# Recieve data communications
 			@send_lock = Mutex.new		# For in sync send and receives when required
+			@confirm_send_lock = Mutex.new		# For use in confirming when a send has taken place
 
-			@wait_condition = ConditionVariable.new			# for waking and waiting on the revieve data
-			@connected_condition = ConditionVariable.new		# for maintaining the current queue on disconnect and re-starting
+			@wait_condition = ConditionVariable.new			# for waking and waiting on the recieve data
+			@connected_condition = ConditionVariable.new	# for maintaining the current queue on disconnect and re-starting
+			@sent_condition = ConditionVariable.new			# This is used to confirm the send
 		
 				
 			@status_lock = Mutex.new	# A lock for last command and is_connected
@@ -48,8 +52,8 @@ module Control
 			@tls_enabled = DeviceModule.lookup[@parent].tls
 				
 			#
-			# Task event loop
-			#	TODO:: Shutdown flag
+			# Task event loops
+			#	TODO:: Shutdown flag required
 			#
 			EM.defer do
 				while true
@@ -72,6 +76,8 @@ module Control
 			EM.defer do
 				@send_queue.synchronize do	# this thread is the send queue (so we lock it)
 					data = nil
+					waitRequired = false
+					delay = 0.0
 					while true
 						begin
 							@dummy_queue.pop
@@ -81,8 +87,28 @@ module Control
 							else
 								data = @pri_queue.pop
 							end
+							
+							#
+							# Guarantee minimum delays between sends
+							#
+							if waitRequired
+								waitRequired = false
+								delay = @last_send_at + delay - Time.now.to_f
+								delay = 0.0 unless delay > 0.0
+							else
+								delay = 0.0
+							end
+							doDelay = delay
+							if data[:delay] != 0
+								waitRequired = true
+								delay = data[:delay].to_f
+							end
+							
+							#
+							# Process the sending of the command (and response if we are waiting)
+							#
 							@send_lock.synchronize {
-								process_send(data)
+								process_send(data, doDelay)
 							}
 						rescue => e
 							@logger.error "-- module #{@parent.class} in em_control.rb, base : error in send loop --"
@@ -134,7 +160,9 @@ module Control
 		attr_reader :is_connected
 		attr_reader :default_send_options
 		def default_send_options= (options)
-			@default_send_options.merge!(options)
+			@status_lock.synchronize {
+				@default_send_options.merge!(options)
+			}
 		end
 			
 
@@ -145,14 +173,14 @@ module Control
 		def send(data, options = {})
 			
 			begin
+				options = nil
 				@status_lock.synchronize {
 					if !@is_connected
 						return true
 					end
+					
+					options = @default_send_options.merge(options)
 				}
-
-
-				options = @default_send_options.merge(options)
 					
 				#
 				# Make sure we are sending appropriately formatted data
@@ -312,8 +340,8 @@ module Control
 		#	send_lock is active
 		#	send_queue monitor is active
 		#
-		def process_send(data)
-			@status_lock.lock
+		def process_send(data, delay)
+			@status_lock.lock		# Status locked
 			@last_command = data
 			if @is_connected == false
 				@status_lock.unlock
@@ -321,31 +349,56 @@ module Control
 			else
 				@status_lock.unlock
 			end
+			
+			
+			process = proc {
+				begin
+					if !error?
+						do_send_data(data[:data])
+					end
+				rescue => e
+					#
+					# Save the thread in case of bad data in that send
+					#
+					EM.defer do
+						@logger.error "-- module #{@parent.class} in em_control.rb, process_send : possible bad data --"
+						@logger.error e.message
+						@logger.error e.backtrace
+					end
+				ensure
+					#
+					# Trigger last sent here (defered to prevent locking on reactor)
+					#
+					EM.defer do
+						@confirm_send_lock.synchronize {
+							@last_send_at = Time.now.to_f
+							@sent_condition.signal
+						}
+					end
+				end
+			}
 
-			@receive_lock.synchronize {
-				EM.schedule proc {	# Send data on the reactor thread
-					begin
-						if !error?
-							do_send_data(data[:data])
-						end
-					rescue => e
-						#
-						# Save the thread in case of bad data in that send
-						#
-						EM.defer do
-							@logger.error "-- module #{@parent.class} in em_control.rb, process_send : possible bad data --"
-							@logger.error e.message
-							@logger.error e.backtrace
-						end
+			@confirm_send_lock.synchronize {
+				@receive_lock.synchronize {
+					#
+					# Provides non-blocking delays on data being sent
+					# 	The delay may be longer than specified, never shorter.
+					#
+					if delay == 0.0
+						EM.schedule process	# Send data on the reactor thread
+					else
+						EM.add_timer delay, process
+					end
+					@sent_condition.wait(@confirm_send_lock)	# This ensures we know when any data was sent
+					
+					
+					#
+					# Synchronize the response
+					#
+					if data[:wait]
+						wait_response
 					end
 				}
-				
-				#
-				# Synchronize the response
-				#
-				if data[:wait]
-					wait_response
-				end
 			}
 		end
 			
