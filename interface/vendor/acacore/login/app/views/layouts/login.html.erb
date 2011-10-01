@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 	<head>
-		<title>Cloud Control</title>
+		<title><%= Login.title %></title>
 
 		<!--
 			CSS
@@ -16,8 +16,14 @@
 	
 	<body>
 		<div id="admin_box">
-			<h1>Login</h1>
+			<h1><%= t(:login) %></h1>
 			<div>
+				<% if !flash[:notice].nil? %>
+					<div class="alert-message warning">
+						<p><%= flash[:notice] %></p>
+					</div>
+				<% end %>
+				
 				<%= yield %>
 			</div>
 		</div>

@@ -1,0 +1,13 @@
+# Sample localization file for English. Add more files in this directory for other locales.
+# See http://github.com/svenfuchs/rails-i18n/tree/master/rails%2Flocale for starting points.
+
+en:
+  #
+  # Login form
+  #
+  login: "Login"
+  login_user: "User"
+  login_password: "Password"
+  login_error: "invalid user or password"
+  login_logout: "you are now logged out"
+  login_button: "Go"

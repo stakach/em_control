@@ -1,6 +1,6 @@
 class ApplicationController < ActionController::Base
 	protect_from_forgery
-	before_filter :authenticate, :except => [:start, :login, :logout]
+	before_filter :authenticate
 	
 	
 	protected
@@ -8,8 +8,6 @@ class ApplicationController < ActionController::Base
 	
 	def authenticate
 		redirect_to root_path if session[:user].nil?
-	rescue
-		redirect_to logout_url
 	end
 	
 	

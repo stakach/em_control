@@ -54,3 +54,6 @@ end
 Login.redirection do
 	render :text => "Authenticated", :layout => false
 end
+
+
+Login.title = "Cloud Control"

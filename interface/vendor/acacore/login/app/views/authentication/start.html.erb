@@ -1,23 +1,18 @@
 
-<% if !flash[:notice].nil? %>
-	<div class="alert-message warning">
-		<p><%= flash[:notice] %></p>
-	</div>
-<% end %>
-
 <%= form_tag login_path do %>
 	<pre class="prettyprint">
 		<table align="center"><tbody>
 			<tr>
-				<td>User</td>
-				<td><input name="username" type="text" /></td>
+				<td><%= label_tag :username, t(:login_user) %></td>
+				<td><%= text_field_tag :username, @username %></td>
 			</tr>
 			<tr>
-				<td>Password</td>
-				<td><input name="password" type="password" /></td>
+				<td><%= label_tag :password, t(:login_password) %></td>
+				<td><%= password_field_tag :password %></td>
 			</tr>
 			<tr>
-				<td colspan="2"><%= submit_tag "Go", :class => "btn primary" %></td>
+				<td><%= submit_tag t(:login_button), :class => "btn primary", :name => '' %></td>
+				<td><a href="#" onclick="$('form').attr('action', '<%= edit_path %>').submit(); return false;">Change Password</a></td>
 			</tr>
 		</tbody></table>
 	</pre>

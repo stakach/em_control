@@ -1,48 +1,32 @@
 class User < ActiveRecord::Base
 	belongs_to	:auth_source
+	has_many	:user_groups, :dependent => :destroy
+	has_many	:groups,	:through => :user_groups
 	
 	
-	def self.try_to_login(login, password)
+	#
+	# This is used for local authentication
+	#	Creates an authenticate(password) method on a user instance
+	#
+	has_secure_password
+	validates_presence_of :password, :on => :create
+	
+	
+	def self.try_to_login(login, password, source)
 		# Make sure no one can sign in with an empty password
-		return nil if password.to_s.empty?
-		user = User.where("LOWER(identifier) LIKE ?", '%' + login.downcase + '%').first
-		attrs = nil
-		if user
-			# user is already in local database
-			return nil if !user.active?
-			attrs = user.auth_source.authenticate(login, password)
-			return nil unless attrs
-			user.touch
-			attrs.merge!(:login => user.id)
-		else
-			# user is generic, try to authenticate with available sources
-			attrs = AuthSource.authenticate(login, password)
-			return nil unless attrs
-			
-			query = ""
-			members = []
-			attrs[:member_of].each do |member|
-				if !member.strip.empty?		# ensure there is a membership - empty strings are bad
-					if query.empty?
-						query += "identifier = ? OR identifier LIKE ?"
-					else
-						query += " OR identifier = ? OR identifier LIKE ?"
-					end
-					members << member << (member + ',%')	# the comma here avoids security risks
-				end
-			end
-			user = User.where(query, *members).first unless query.empty?
-			
-			if user && user.active?
-				attrs.merge!(:login => user.id)
-			else
-				return nil
-			end
-		end
+		return nil if password.blank? || login.blank? || source.nil?
 		
-		return attrs
-	rescue => text
-		return nil
+		#
+		# Try and login the user
+		#
+		user = nil
+		begin
+			logger.debug "Authenticating '#{login}' against '#{source.name}'" if logger.debug?
+			user = source.authenticate(login, password)
+		rescue => e
+			logger.error "Error during authentication: #{e.message}"
+		end
+		return user
 	end
 	
 	

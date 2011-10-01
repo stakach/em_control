@@ -20,8 +20,8 @@ require 'iconv'
 require 'base64'
 
 class AuthSourceLdap < AuthSource
-	validates_presence_of :host, :port, :attr_login
-	validates_length_of :title, :host, :account_password, :maximum => 255, :allow_nil => true
+	validates_presence_of :host, :port, :attr_login, :name
+	validates_length_of :host, :encrypted_password, :maximum => 255, :allow_nil => true
 	validates_length_of :account, :base_dn, :maximum => 255, :allow_nil => true
 	validates_length_of :attr_login, :attr_firstname, :attr_lastname, :attr_mail, :maximum => 255, :allow_nil => true
 	validates_numericality_of :port, :only_integer => true
@@ -30,25 +30,81 @@ class AuthSourceLdap < AuthSource
 	after_initialize :set_port
 	
 	
+	#attr_encrypted :password, :key => 'aca secret key:dcJD9eSRqYwxxPHK4g6ASIyiDsM=', :algorithm => 'aes-256-ecb'
+	
+	
 	def set_port
 		self.port = 389 if self.port == 0
 	end
 	
-	def authenticate(login, password)
-		return nil if login.blank? || password.blank?
+	def authenticate(login, pass)
+		return nil if login.blank? || pass.blank?
+		
+		#
+		# Query the LDAP for the user information if it exists
+		#
 		attrs = get_user_dn(login)
 		
-		if attrs && attrs[:dn] && authenticate_dn(attrs[:dn], password)
+		if attrs && attrs[:dn] && authenticate_dn(attrs[:dn], pass)	# Confirm the users credentials are correct
 			logger.debug "Authentication successful for '#{login}'" if logger && logger.debug?
-			return attrs.except(:dn)
+			user = nil
+			
+			#
+			# Check user is in any of the valid groups
+			#	A user can be a group in itself too if a matching group exists
+			#
+			auth_groups = self.groups.select('identifier').map {|group| group.identifier}
+			users_groups = attrs[:member_of].map {|group| group.strip}
+			users_groups << login
+			
+			#
+			# Check for common ground
+			#
+			common = auth_groups & users_groups
+			if common.length > 0
+				user = User.where('identifier = ? AND auth_source_id = ?', login, self.id).first
+				if user.nil?
+					user = User.new
+					user.identifier = login
+					user.auth_source_id = self.id
+					user.password = 'LDAP'
+					user.password_confirmation = 'LDAP'
+					user.save!
+				end
+				
+				#
+				# Remove user from groups they are no longer apart of (LDAP is king)
+				#	This does not call callbacks as it is not required for the relation
+				#
+				user.user_groups.where('user_groups.forced = ? AND user_groups.id IN (SELECT groups.id FROM groups WHERE groups.auth_source_id = ? AND groups.identifier NOT IN (?))', false, self.id, common).delete_all
+				
+				#
+				# Add any groups that do not have existing relationships and exist in the database
+				#
+				user.groups << Group.select('id').where('groups.auth_source_id = ? AND groups.identifier IN (?) AND NOT EXISTS (SELECT * FROM user_groups WHERE user_groups.user_id = ? AND user_groups.group_id = groups.id)', self.id, common, user.id)
+				#Group.select('id').where('auth_source_id = ? AND identifier IN (?) AND NOT EXISTS (SELECT * FROM user_groups WHERE user_groups.user_id = ? AND user_groups.group_id = groups.id)', self.id, common, user.id).each do |group|
+				#	user.user_groups << UserGroup.new({:group_id => group.id})
+				#end
+				
+				user.firstname = attrs[:firstname] unless attrs[:firstname].blank?
+				user.lastname = attrs[:lastname] unless attrs[:lastname].blank?
+				user.email = attrs[:mail] unless attrs[:mail].blank?
+				user.login_count += 1
+				user.save!
+				
+				
+				return user
+			end
 		end
+		
+		return nil
 	rescue  Net::LDAP::LdapError => text
 		raise "LdapError: " + text
 	end
 	
 	# test the connection to the LDAP
 	def test_connection
-		ldap_con = initialize_ldap_con(self.account, self.account_password)
+		ldap_con = initialize_ldap_con(self.account, self.encrypted_password)
 		ldap_con.open do |ldap|
 		end
 	rescue  Net::LDAP::LdapError => text
@@ -61,21 +117,16 @@ class AuthSourceLdap < AuthSource
 	
 	#
 	# Encode the LDAP password so it is not clear text in the database
+	#	TODO:: Depreciate for next version (db field removed)
 	#
-	def account_password=(cleartext)
-		if cleartext.nil? || cleartext.empty?
-			return
-		end
-		self[:account_password] = Base64.encode64(cleartext)
-	end
-	
 	def account_password
-		if self[:account_password].nil? || self[:account_password].empty?
+		if self[:account_password].blank?
 			return ""
 		end
 	
 		Base64.decode64(self[:account_password])
 	end
+	
 	
 	
 	private
@@ -120,7 +171,7 @@ class AuthSourceLdap < AuthSource
 	
 	# Get the user's dn and any attributes for them, given their login
 	def get_user_dn(login)
-		ldap_con = initialize_ldap_con(self.account, self.account_password)
+		ldap_con = initialize_ldap_con(self.account, self.encrypted_password)
 		login_filter = Net::LDAP::Filter.eq( self.attr_login, login ) 
 		object_filter = Net::LDAP::Filter.eq( "objectClass", "*" ) 
 		attrs = {}

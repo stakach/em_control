@@ -1,7 +1,11 @@
 //= require jquery
 
 $(document).ready(function(){
-	$('table tr:first-child input').focus();
+	var $input = $('input[name="username"]');
+	if($input.val() == "")
+		$input.focus();
+	else
+		$('input[name="password"]').focus();
 });
 
 if(!!history.pushState)

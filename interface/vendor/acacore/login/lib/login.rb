@@ -16,4 +16,7 @@ module Login
 		@user_mixin
 	end
 	
+	@@title = ""
+	mattr_accessor :title
+	
 end
