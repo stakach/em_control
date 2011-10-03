@@ -60,6 +60,10 @@ module Control
 				#	IP lookups are always correct and we are always sending to the
 				#	specified device
 				#
+				#
+				# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
+				# => Use the non-blocking resolver in the future
+				#
 				ip = Addrinfo.tcp(scheme.ip, 80).ip_address
 				text = "#{scheme.ip}:#{scheme.port}"
 				old_ip = @ips[text]
@@ -81,6 +85,10 @@ module Control
 		def add_device(scheme, device)
 			EM.schedule do
 				begin
+					#
+					# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
+					# => Use the non-blocking resolver in the future
+					#
 					ip = Addrinfo.tcp(scheme.ip, 80).ip_address
 					@devices["#{ip}:#{scheme.port}"] = device
 					@ips["#{scheme.ip}:#{scheme.port}"] = ip

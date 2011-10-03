@@ -3,7 +3,7 @@ RailsAdmin.config do |config|
   config.current_user_method { current_rake db:migrate } #auto-generated
 	
 	
-	config.included_models = ['User', 'Group', 'AuthSource']
+	config.included_models = ['User', 'Group', 'AuthSource', 'Zone', 'TrustedDevice', 'Dependency', 'Setting', 'Controller', 'ControllerLogic', 'ControllerDevice']
 	config.label_methods << :identifier
 	
 	
@@ -120,6 +120,7 @@ RailsAdmin.config do |config|
 			
 			group :group_members do
 				field :users
+				field :zones
 			end
 		
 		end

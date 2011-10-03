@@ -108,8 +108,8 @@ module Control
 			#
 			# AutoLoad the interfaces (we should do this automatically)
 			#
-			require ROOT_DIR + '/control/interfaces/telnet/telnet.rb'
-			TelnetServer.start
+			#require ROOT_DIR + '/control/interfaces/telnet/telnet.rb'	Insecure
+			#TelnetServer.start
 			require ROOT_DIR + '/control/interfaces/html5/html5.rb'
 		end
 	end

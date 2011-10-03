@@ -26,20 +26,30 @@ class Communicator
 
 	
 	#
-	# Systems avaliable to this communicator
+	# Systems avaliable to this user
 	#
-	def self.system_list
-		System.systems.keys
+	def self.system_list(user)
+		response = {:ids => [], :names => []}
+		user.controllers.select('controllers.id, controllers.name').each do |controller|
+			if !!System.systems[controller.name.to_sym]
+				response[:ids] << controller.id
+				response[:names] << controller.name
+			end
+		end
+		return response
 	end
 	
 	#
 	# Set the system to communicate with
 	#	Up to interfaces to maintain stability here (They should deal with errors)
 	#
-	def self.select(interface, system)
-		System.logger.debug "-- Interface #{interface.class} selected system #{system}"
-		system = system.to_sym if system.class == String
+	def self.select(user, interface, system)
+		System.logger.debug "-- Interface #{interface.class} attempting to select system #{system}"
+		sys = user.controllers.select('controllers.name').where('controllers.id = ?', system.to_i).first
+		system = sys.nil? ? nil : sys.name.to_sym
 		return nil if System.systems[system].nil?
+		
+		System.logger.debug "-- Interface #{interface.class} selected system #{system}"
 		return System.systems[system].communicator.attach(interface)
 	end
 

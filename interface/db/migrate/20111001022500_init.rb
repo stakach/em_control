@@ -106,7 +106,7 @@ class Init < ActiveRecord::Migration
 		end
 		
 		create_table :user_zones do |t|
-			t.references :user
+			t.references :group
 			t.references :zone
 			
 			t.integer	:privilege_map	# if not null overrides user default privilege map (user zones OR'ed)
@@ -134,7 +134,7 @@ class Init < ActiveRecord::Migration
 			t.text		:notes
 			
 			t.string	:one_time_key
-			t.datetime	:expires			# not currently used
+			t.datetime	:expires			# Expire devices (staff member leaving etc)
 			t.datetime	:last_authenticated	# Cache update indicator
 			
 			t.timestamps

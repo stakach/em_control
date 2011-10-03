@@ -108,6 +108,10 @@ module Control
 				
 				if @connect_retry == 0
 					begin
+						#
+						# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
+						# => Use the non-blocking resolver in the future
+						#
 						reconnect Addrinfo.tcp(settings.ip, 80).ip_address, settings.port
 						@connect_retry = 1
 					rescue
@@ -137,6 +141,10 @@ module Control
 			def do_reconnect(settings)
 				EM.add_timer 5, proc { 
 					begin
+						#
+						# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
+						# => Use the non-blocking resolver in the future
+						#
 						reconnect Addrinfo.tcp(settings.ip, 80).ip_address, settings.port
 					rescue
 						do_reconnect(settings)

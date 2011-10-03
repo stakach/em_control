@@ -5,8 +5,8 @@
 #
 Login.user_mixin do
 	has_many	:trusted_devices,	:dependent => :destroy
-	has_many	:user_zones,		:dependent => :destroy
-	has_many	:zones,				:through => :user_zones
+	has_many	:zones,				:through => :groups
+	has_many	:controllers, 		:through => :zones
 	
 	
 	SECURITY = {
@@ -45,6 +45,12 @@ Login.user_mixin do
 			end
 		end
 	end
+end
+
+
+Login.group_mixin do
+	has_many	:user_zones,		:dependent => :destroy
+	has_many	:zones,				:through => :user_zones
 end
 
 

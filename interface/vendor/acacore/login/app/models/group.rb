@@ -5,3 +5,8 @@ class Group < ActiveRecord::Base
 	belongs_to	:auth_source
 	
 end
+
+#
+# Mix in any project specific code
+#
+Group.class_eval &Login.group_mixin unless Login.group_mixin.nil?

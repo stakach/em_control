@@ -16,6 +16,11 @@ module Login
 		@user_mixin
 	end
 	
+	def self.group_mixin(&block)
+		@group_mixin = block if block
+		@group_mixin
+	end
+	
 	@@title = ""
 	mattr_accessor :title
 	

@@ -44,23 +44,49 @@ class HTML5Monitor
 	end
 	
 	def self.receive(id, data)
+		client = nil
 		@@client_lock.synchronize {
-			@@clients[id].receive(data)
+			client = @@clients[id]
 		}
+		client.receive(data)
+	end
+	
+	
+	#
+	#
+	# Instance methods:
+	#
+	#
+	def try_auth(data = nil)
+		if !!@user
+			if data.nil?
+				return true
+			else
+				@user = nil
+				return try_auth(data)
+			end
+		else
+			if !data.nil? && data.class == Array
+				if data.length == 1	# one time key
+					key = TrustedDevice.where('one_time_key = ? AND expires > ?', data[0], Time.now).first
+					@user = key.user unless key.nil?
+				elsif data.length == 3
+											#user, password, auth_source
+					@user = User.try_to_login(data[0], data[1], data[2])
+				else
+					@user = User.try_to_login(data[0], data[1])
+				end
+				
+				return try_auth	# no data
+			end
+			
+			@socket.send(JSON.generate({:event => "authenticate", :data => []}))
+		end
+		return false
 	end
 	
 	def send_system
 		@socket.send(JSON.generate({:event => "system", :data => []}))
-	end
-	
-	def try_auth(data = nil)
-		#
-		# TODO:: authentication
-		#
-		# try auth
-		#	send auth on fail
-		# else 
-		@socket.send(JSON.generate({:event => "ready", :data => []}))
 	end
 
 
@@ -68,16 +94,17 @@ class HTML5Monitor
 	# The core communication functions
 	#
 	def initialize(socket)
-		@socket = socket
-		@system = nil
-		@authenticated = false
-		
 		@data_lock = Mutex.new
 		
 		#
-		# Send system event as per the spec
+		# Must authenticate before any system details will be sent
 		#
-		send_system
+		@data_lock.synchronize {
+			@socket = socket
+			@system = nil
+			@user = nil
+			try_auth	# will not be authenticated here
+		}
 	end
 	
 	def disconnected
@@ -92,26 +119,37 @@ class HTML5Monitor
 		data[:data] = [] unless data[:data].class == Array
 
 		@data_lock.synchronize {
+			#
+			# Ensure authenticated
+			#
+			if data[:command] == "authenticate"
+				return unless try_auth(data[:data])
+			else
+				return if !try_auth
+			end
+			
+			#
+			# Ensure system is selected
+			#
+			if @system.nil? && !@@special_events.has_key?(data[:command])
+				send_system
+				return
+			end
+			
 			if @@special_events.has_key?(data[:command])		# system, auth, ls
 				case @@special_events[data[:command]]
 					when :system
-						@system = Control::Communicator.select(self, data[:data][0]) unless data[:data].empty?
+						@system.disconnected(self) unless @system.nil?
+						@system = nil
+						@system = Control::Communicator.select(@user, self, data[:data][0]) unless data[:data].empty?
 						if @system.nil?
 							send_system
-						else
-							try_auth
-						end
-					when :authenticate
-						if @system.nil?
-							send_system
-						else
-							try_auth(data[:data])
 						end
 					when :ping
 						@socket.send(JSON.generate({:event => "pong", :data => []}))
 					when :ls
-						@socket.send(JSON.generate({:event => "system",
-							:data => Communicator.system_list}))
+						@socket.send(JSON.generate({:event => "ls",
+							:data => Communicator.system_list(@user)}))
 				end
 			elsif @@special_commands.has_key?(data[:command])	# reg, unreg
 				array = data[:data]
@@ -150,14 +188,20 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 	
 	socket.onopen {
 		#
-		# Setup status variable here :)
-		#	We could use a 
+		# This socket represents a connected device
 		#
 		id = socket
 		
 		EM.defer do
-			HTML5Monitor.register(id)
-			Control::System.logger.debug 'HTML5 browser connected'
+			begin
+				HTML5Monitor.register(id)
+				Control::System.logger.debug 'HTML5 browser connected'
+			rescue => e
+				logger = Control::System.logger
+				logger.error "-- in html5.rb, onopen in register : client could not be joined --"
+				logger.error e.message
+				logger.error e.backtrace
+			end
 		end
 		
 		socket.onmessage { |data|
@@ -166,15 +210,39 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 			#	then process commands
 			#
 			EM.defer do
-				HTML5Monitor.receive(id, data)
+				begin
+					HTML5Monitor.receive(id, data)
+				rescue => e
+					logger = Control::System.logger
+					logger.error "-- in html5.rb, onmessage : client did not exist (we may have been shutting down) --"
+					logger.error e.message
+					logger.error e.backtrace
+				end
 			end
 		}
 
 		socket.onclose {
 			EM.defer do
-				HTML5Monitor.unregister(id)
-				Control::System.logger.info "There are now #{HTML5Monitor.count} HTML5 clients connected"
+				begin
+					HTML5Monitor.unregister(id)
+					Control::System.logger.debug "There are now #{HTML5Monitor.count} HTML5 clients connected"
+				rescue => e
+					logger = Control::System.logger
+					logger.error "-- in html5.rb, onclose : unregistering client did not exist (we may have been shutting down) --"
+					logger.error e.message
+					logger.error e.backtrace
+				end
 			end
+		}
+		
+		socket.onerror { |error|
+			#if error.kind_of?(EM::WebSocket::WebSocketError)
+				EM.defer do
+					logger.error "-- in html5.rb, onerror : issue with websocket data --"
+					logger.error e.message
+					logger.error e.backtrace
+				end
+			#end
 		}
 	}
 

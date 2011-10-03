@@ -1,6 +1,7 @@
 class Dependency < ActiveRecord::Base
-	has_many :devices,	:dependent => :destroy
-	has_many :logics,		:dependent => :destroy
+	has_many :devices,	:class_name => "ControllerDevice",	:dependent => :destroy
+	has_many :logics,	:class_name => "ControllerLogic",	:dependent => :destroy
+	
 	has_many :settings,	:as => :object,		:dependent => :destroy
 	
 	scope :for_controller, lambda {|controller|
