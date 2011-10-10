@@ -1,5 +1,3 @@
-require 'json'
-
 #
 # Settings required:
 #	* domain (domain that we will be authenticating against)
@@ -27,14 +25,13 @@ class PodComputer < Control::Device
 	def connected(cert)	# if we want to check the TLS cert
 		
 	end
-
+	
 	def disconnected
 		@authenticated = 0
 	end
-
-	def load_page(page)
-		command = {:control => "web", :command => page, :args => []}
-		send(JSON.generate(command))
+	
+	def launch_application(app)
+		do_send({:control => "app", :command => app, :args => []})
 	end
 	
 
@@ -51,42 +48,49 @@ class PodComputer < Control::Device
 	#
 	CAM_OPERATIONS.each do |command|
 		define_method command do |*args|
-			command = {:control => "cam", :command => command.to_s, :args => []}
-			send(JSON.generate(command), {:priority => 99})	# Cam control is low priority in case a camera is not plugged in
+			# Cam control is low priority in case a camera is not plugged in
+			do_send({:control => "cam", :command => command.to_s, :args => []}, {:priority => 99})
 		end
 	end
 	
 	def zoom(val)
-		command = {:control => "cam", :command => "zoom", :args => [val.to_s]}
-		send(JSON.generate(command))
+		do_send({:control => "cam", :command => "zoom", :args => [val.to_s]})
 	end
 
 
-	#
-	# Computer Response
-	#
+	
+	def response_delimiter
+		0x03	# Used to interpret the end of a message
+	end
+	
 	def received(data)
-		data = array_to_str(data)
-		begin
-			data = JSON.parse(data, {:symbolize_names => true})
-			logger.debug "-- COMPUTER, sent: #{data.inspect}"
-		rescue
-			#
-			# C# Code seems to be leaving a little bit of data for me to trip over
-			#
-			logger.debug "-- COMPUTER, bad data: #{data}"
-			return true
-		end
+		#
+		# Remove the start character and grab the message
+		#
+		data = array_to_str(data).split("" << 0x02)[-1]
 		
+		#
+		# Convert the message into a naitive object
+		#
+		data = JSON.parse(data, {:symbolize_names => true})
+		logger.debug "-- COMPUTER, sent: #{data.inspect}"
+		
+		#
+		# Process the response
+		#
 		if data[:command] == "authenticate"
 			command = {:control => "auth", :command => setting(:domain), :args => [setting(:username), setting(:password)]}
 			if @authenticated > 0
-				one_shot(60) do		# Token retry (probably always fail - at least we can see in the logs)
-					send(JSON.generate(command))
+				#
+				# Token retry (probably always fail - at least we can see in the logs)
+				#	We don't want to flood the network with useless commands
+				#
+				one_shot(60) do
+					do_send(command)
 				end
 				logger.info "-- Pod Computer, is refusing authentication"
 			else
-				send(JSON.generate(command))
+				do_send(command)
 			end
 			@authenticated += 1
 			logger.debug "-- COMPUTER, requested authentication"
@@ -100,5 +104,11 @@ class PodComputer < Control::Device
 		end
 		
 		return true # Command success
+	end
+	
+	private
+	
+	def do_send(command, options = {})
+		send("" << 0x02 << JSON.generate(command) << 0x03, options)
 	end
 end

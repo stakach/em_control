@@ -3,7 +3,7 @@ RailsAdmin.config do |config|
   config.current_user_method { current_rake db:migrate } #auto-generated
 	
 	
-	config.included_models = ['User', 'Group', 'AuthSource', 'Zone', 'TrustedDevice', 'Dependency', 'Setting', 'Controller', 'ControllerLogic', 'ControllerDevice']
+	config.included_models = ['User', 'Group', 'AuthSource', 'Zone', 'TrustedDevice', 'Dependency', 'Setting', 'ControlSystem', 'ControllerLogic', 'ControllerDevice']
 	config.label_methods << :identifier
 	
 	
@@ -225,4 +225,104 @@ RailsAdmin.config do |config|
 		"#{self.name} authentication"
 	end
 	
+	
+	#
+	# Control Specific
+	#
+	config.model Dependency do
+		weight 10
+		
+		object_label_method do
+			:dep_label_method
+		end	
+		
+		field :actual_name
+		field :module_name
+		field :classname
+		field :filename
+		field :description
+	end
+	
+	def dep_label_method
+		"#{self.actual_name}"
+	end
+	
+	
+	config.model Zone do
+		weight 11
+		
+		field :name
+		field :description
+		
+		field :groups
+		field :control_systems
+	end	
+	
+	
+	config.model ControlSystem do
+		weight 12
+		
+		field :name
+		field :description
+		
+		field :zones
+	end
+	
+	
+	config.model ControllerDevice do
+		weight 13
+		
+		object_label_method do
+			:dev_label_method
+		end	
+		
+		group :device_configuration do
+			field :dependency
+			field :ip
+			field :port
+			field :tls
+			field :udp
+		end
+		
+		group :device_location do
+			field :control_system
+			field :priority
+		end
+	end
+	
+	def dev_label_method
+		"#{self.dependency.actual_name} instance"
+	end
+	
+	
+	config.model ControllerLogic do
+		weight 14
+		
+		object_label_method do
+			:dev_label_method
+		end	
+		
+		field :dependency
+		field :control_system
+		field :priority
+	end
+	
+	config.model Setting do
+		weight 15
+		
+		field :object
+		
+		field :name
+		field :description
+		field :value_type, :enum do
+			enum do
+				[['Text Value', 0], ['Integer Value', 1], ['Float Value', 2], ['DateTime Value', 3]]
+			end
+			help 'Required.'
+		end
+		field :text_value
+		field :integer_value
+		field :float_value
+		field :datetime_value
+	end
 end

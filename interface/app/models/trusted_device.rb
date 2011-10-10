@@ -6,7 +6,7 @@ require 'digest/sha1'	# For one time key
 #
 class TrustedDevice < ActiveRecord::Base
 	belongs_to	:user
-	belongs_to	:controller
+	belongs_to	:control_system
 	
 	#
 	# Generates a one-time key that will allow this device to login without interaction
@@ -42,5 +42,5 @@ class TrustedDevice < ActiveRecord::Base
 	protected
 	
 	
-	validates_presence_of :user, :trusted_by, :controller, :description
+	validates_presence_of :user, :trusted_by, :control_system, :description
 end

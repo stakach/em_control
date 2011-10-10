@@ -51,7 +51,7 @@ class PodControl < Control::Logic
 	
 
 	def start_collaborating
-		system[:Computer].load_page(setting(:collaboration_page))
+		system[:Computer].launch_application(setting(:collaboration_page))
 	end
 	
 	#

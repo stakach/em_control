@@ -120,7 +120,15 @@ class PanasonicSwitcher < Control::Device
 	# Response callback
 	#
 	def received(data)
-		data.shift(6)		# removes the leading character + 4 byte command string + :
+		#
+		# removes the leading character and ensures we only have the start of this message
+		#
+		data = array_to_str(data).split("" << 0x02)[-1]
+		
+		#
+		# removes the 4 byte command string and the leading ':' character
+		#
+		data.shift(5)
 		data = array_to_str(data).split(':')
 		
 		#

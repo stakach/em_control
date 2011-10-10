@@ -68,8 +68,11 @@ class HTML5Monitor
 		else
 			if !data.nil? && data.class == Array
 				if data.length == 1	# one time key
-					key = TrustedDevice.where('one_time_key = ? AND expires > ?', data[0], Time.now).first
-					@user = key.user unless key.nil?
+					begin
+						key = TrustedDevice.where('one_time_key = ? AND expires > ?', data[0], Time.now).first
+						@user = key.user unless key.nil?
+					rescue
+					end
 				elsif data.length == 3
 											#user, password, auth_source
 					@user = User.try_to_login(data[0], data[1], data[2])

@@ -101,7 +101,7 @@ module Control
 			#
 			# Load the system based on the database
 			#
-			Controller.all.each do |controller|
+			ControlSystem.all.each do |controller|
 				System.new(controller, @logLevel)
 			end
 			

@@ -77,7 +77,7 @@ module Control
 				send_datagram(data, ip, scheme.port)
 			rescue => e
 				EM.defer do
-					System.logger.info e.message + " calling UDP send for #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.controller.name}"
+					System.logger.info e.message + " calling UDP send for #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.control_system.name}"
 				end
 			end
 		end
@@ -97,7 +97,7 @@ module Control
 					@ips["#{scheme.ip}:#{scheme.port}"] = scheme.ip
 					
 					EM.defer do
-						System.logger.info e.message + " adding UDP #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.controller.name}"
+						System.logger.info e.message + " adding UDP #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.control_system.name}"
 					end
 				end
 			end
@@ -109,7 +109,7 @@ module Control
 					ip = @ips.delete("#{scheme.ip}:#{scheme.port}")
 					@devices.delete("#{ip}:#{scheme.port}")
 				rescue
-					System.logger.info e.message + " removing UDP #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.controller.name}"
+					System.logger.info e.message + " removing UDP #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.control_system.name}"
 				end
 			end
 		end

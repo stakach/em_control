@@ -86,7 +86,7 @@ module Control
 			#
 			# Instance of a module
 			#
-			@instance = Modules[controllerDevice.dependency_id].new(System.controllers[controllerDevice.controller_id])
+			@instance = Modules[controllerDevice.dependency_id].new(System.controllers[controllerDevice.control_system_id])
 			
 			#
 			# Database settings
@@ -99,7 +99,7 @@ module Control
 					begin
 						EM.connect Addrinfo.tcp(controllerDevice.ip, 80).ip_address, controllerDevice.port, Device::Base
 					rescue => e
-						System.logger.info e.message + " connecting to #{controllerDevice.dependency.actual_name} @ #{controllerDevice.ip} in #{controllerDevice.controller.name}"
+						System.logger.info e.message + " connecting to #{controllerDevice.dependency.actual_name} @ #{controllerDevice.ip} in #{controllerDevice.control_system.name}"
 						EM.connect "127.0.0.1", 10, Device::Base	# Connect to a nothing port until the device name is found or updated
 					end
 				else
@@ -165,7 +165,7 @@ module Control
 			if Modules[controllerLogic.dependency.id].nil?
 				Modules.load_module(controllerLogic.dependency)		# This is the re-load code function (live bug fixing - removing functions does not work)
 			end
-			@instance = Modules[controllerLogic.dependency_id].new(System.controllers[controllerLogic.controller_id])
+			@instance = Modules[controllerLogic.dependency_id].new(System.controllers[controllerLogic.control_system_id])
 			@@lookup[@instance] = controllerLogic
 			if @instance.respond_to?(:on_load)
 				begin

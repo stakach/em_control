@@ -3,7 +3,7 @@ class Init < ActiveRecord::Migration
 		#
 		# These represent individual systems
 		#
-		create_table :controllers do |t|
+		create_table :control_systems do |t|
 			t.string	:name,		:allow_null => false
 			t.text		:description
 			t.boolean	:active,	:default => true,	:allow_null => false
@@ -34,7 +34,7 @@ class Init < ActiveRecord::Migration
 		# => Priority provides load order (high priorities load first)
 		#
 		create_table :controller_devices do |t|
-			t.references	:controller,	:allow_null => false
+			t.references	:control_system,:allow_null => false
 			t.references	:dependency,	:allow_null => false
 
 			t.string	:ip,	:allow_null => false
@@ -49,7 +49,7 @@ class Init < ActiveRecord::Migration
 		end
 		
 		create_table :controller_logics do |t|
-			t.references	:controller,	:allow_null => false
+			t.references	:control_system,:allow_null => false
 			t.references	:dependency,	:allow_null => false
 			
 			t.integer		:priority,	:default => 0
@@ -115,7 +115,7 @@ class Init < ActiveRecord::Migration
 		end
 		
 		create_table :controller_zones do |t|
-			t.references :controller
+			t.references :control_system
 			t.references :zone
 			
 			t.timestamps
@@ -127,7 +127,7 @@ class Init < ActiveRecord::Migration
 		#
 		create_table :trusted_devices do |t|
 			t.references	:user,			:allow_null => false
-			t.references	:controller,	:allow_null => false
+			t.references	:control_system,:allow_null => false
 			
 			t.string	:trusted_by,		:allow_null => false
 			t.string	:description,		:allow_null => false

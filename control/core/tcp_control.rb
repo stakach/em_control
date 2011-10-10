@@ -96,7 +96,7 @@ module Control
 					settings = DeviceModule.lookup[@parent].reload
 				rescue
 					EM.defer do
-						@logger.fatal "-- module #{@parent.class} in em_control.rb, unbind --"
+						@logger.fatal "-- module #{@parent.class} in tcp_control.rb, unbind --"
 						@logger.fatal "Settings reload failed. Device going offline."
 					end
 					#
@@ -117,7 +117,7 @@ module Control
 					rescue
 						@connect_retry = 2
 						EM.defer do
-							@logger.info "-- module #{@parent.class} in em_control.rb, unbind --"
+							@logger.info "-- module #{@parent.class} in tcp_control.rb, unbind --"
 							@logger.info "Reconnect failed for #{settings.ip}:#{settings.port}"
 						end
 						do_reconnect(settings)
@@ -129,7 +129,7 @@ module Control
 					#
 					if @connect_retry == 2
 						EM.defer do
-							@logger.info "-- module #{@parent.class} in em_control.rb, unbind --"
+							@logger.info "-- module #{@parent.class} in tcp_control.rb, unbind --"
 							@logger.info "Reconnect failed for #{settings.ip}:#{settings.port}"
 						end
 					end		

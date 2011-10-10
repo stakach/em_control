@@ -6,7 +6,7 @@
 Login.user_mixin do
 	has_many	:trusted_devices,	:dependent => :destroy
 	has_many	:zones,				:through => :groups
-	has_many	:controllers, 		:through => :zones
+	has_many	:control_systems, 	:through => :zones
 	
 	
 	SECURITY = {
