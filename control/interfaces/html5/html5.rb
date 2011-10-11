@@ -58,6 +58,10 @@ class HTML5Monitor
 	#
 	#
 	def try_auth(data = nil)
+		if @ignoreAuth
+			return false
+		end
+		
 		if !!@user
 			if data.nil?
 				return true
@@ -75,15 +79,21 @@ class HTML5Monitor
 					end
 				elsif data.length == 3
 											#user, password, auth_source
-					@user = User.try_to_login(data[0], data[1], data[2])
-				else
-					@user = User.try_to_login(data[0], data[1])
+					source = AuthSource.where("name = ?", data[2]).first
+					@user = User.try_to_login(data[0], data[1], source)
 				end
 				
 				return try_auth	# no data
 			end
 			
-			@socket.send(JSON.generate({:event => "authenticate", :data => []}))
+			#
+			# Prevent DOS/brute force Attacks
+			#
+			@ignoreAuth = true
+			EventMachine::Timer.new(3) do
+				@socket.send(JSON.generate({:event => "authenticate", :data => []}))
+				@ignoreAuth = false
+			end
 		end
 		return false
 	end
@@ -127,12 +137,15 @@ class HTML5Monitor
 			#
 			if data[:command] == "authenticate"
 				return unless try_auth(data[:data])
+				send_system
+				return
 			else
 				return if !try_auth
 			end
 			
 			#
 			# Ensure system is selected
+			#	If a command is sent out of order
 			#
 			if @system.nil? && !@@special_events.has_key?(data[:command])
 				send_system
@@ -147,6 +160,8 @@ class HTML5Monitor
 						@system = Control::Communicator.select(@user, self, data[:data][0]) unless data[:data].empty?
 						if @system.nil?
 							send_system
+						else
+							@socket.send(JSON.generate({:event => "ready", :data => []}))
 						end
 					when :ping
 						@socket.send(JSON.generate({:event => "pong", :data => []}))
@@ -220,6 +235,8 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 					logger.error "-- in html5.rb, onmessage : client did not exist (we may have been shutting down) --"
 					logger.error e.message
 					logger.error e.backtrace
+				ensure
+					ActiveRecord::Base.clear_active_connections!	# Clear any unused connections
 				end
 			end
 		}

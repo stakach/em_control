@@ -30,7 +30,7 @@ class Communicator
 	#
 	def self.system_list(user)
 		response = {:ids => [], :names => []}
-		user.controllers.select('controllers.id, controllers.name').each do |controller|
+		user.control_systems.select('control_systems.id, control_systems.name').each do |controller|
 			if !!System.systems[controller.name.to_sym]
 				response[:ids] << controller.id
 				response[:names] << controller.name
@@ -45,7 +45,7 @@ class Communicator
 	#
 	def self.select(user, interface, system)
 		System.logger.debug "-- Interface #{interface.class} attempting to select system #{system}"
-		sys = user.controllers.select('controllers.name').where('controllers.id = ?', system.to_i).first
+		sys = user.control_systems.select('control_systems.name').where('control_systems.id = ?', system.to_i).first
 		system = sys.nil? ? nil : sys.name.to_sym
 		return nil if System.systems[system].nil?
 		

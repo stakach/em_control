@@ -1,5 +1,5 @@
 desc 'Start the control system server'
-task :control, :debug, :needs => :environment do |t, args|
+task :control, [:debug] => [:environment] do |t, args|
 	args.with_defaults(:debug => 'INFO')
 
 	require './../em-control.rb'

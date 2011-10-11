@@ -20,6 +20,7 @@ module Control
 			}
 
 			@receive_queue = Queue.new	# So we can process responses in different ways
+			@data_packet = nil
 			@task_queue = Queue.new		# basically we add tasks here that we want to run in a strict order
 			
 			@dummy_queue = Queue.new	# === dummy queue (informs when there is data to read from either the high or regular queues)
@@ -130,10 +131,9 @@ module Control
 						data = @receive_queue.pop
 						@receive_lock.lock
 						if @send_lock.locked?
-							@status_lock.synchronize {
-								@last_command[:response] = data
-							}
-							@wait_condition.signal		# signal the thread to wakeup
+							@data_packet = data
+							@wait_condition.broadcast		# signal the thread to wakeup
+							@wait_condition.wait(@receive_lock)
 							@receive_lock.unlock
 						else
 							#
@@ -146,6 +146,10 @@ module Control
 							}
 						end
 					rescue => e
+						begin
+							@receive_lock.unlock
+						rescue
+						end
 						@logger.error "-- module #{@parent.class} in device_connection.rb, base : error in recieve loop --"
 						@logger.error e.message
 						@logger.error e.backtrace
@@ -173,7 +177,6 @@ module Control
 		def send(data, options = {})
 			
 			begin
-				options = nil
 				@status_lock.synchronize {
 					if !@is_connected
 						return true
@@ -251,7 +254,7 @@ module Control
 			}
 				
 			@send_lock.synchronize {
-				@connected_condition.signal		# wake up the thread
+				@connected_condition.broadcast		# wake up the thread
 			}
 			
 			@task_queue.push lambda {
@@ -274,6 +277,7 @@ module Control
 		# Data recieved
 		#	Allow modules to set message delimiters for auto-buffering
 		#	Default max buffer length == 1mb (setting can be overwritten)
+		#	NOTE: The buffer cannot be defered otherwise there are concurrency issues 
 		#
 		def do_receive_data(data)
 			if @parent.respond_to?(:response_delimiter)
@@ -287,6 +291,7 @@ module Control
 					end
 					return	# Prevent fall through (on error we will add the data to the recieve queue)
 				rescue => e
+					@buf = nil	# clear the buffer
 					EM.defer do
 						@logger.error "-- module #{@parent.class} error whilst setting delimiter --"
 						@logger.error e.message
@@ -305,12 +310,12 @@ module Control
 			# Delimiter can be a byte array, string or regular expression
 			#
 			del = @parent.response_delimiter
-			case del.class
-				when Array
-					del = array_to_str(del)
-				when Fixnum
-					del = array_to_str([del & 0xFF])
+			if del.class == Array
+				del = array_to_str(del)
+			elsif del.class == Fixnum
+				del = "" << del #array_to_str([del & 0xFF])
 			end
+			
 			return del
 		end
 		
@@ -350,7 +355,6 @@ module Control
 				@status_lock.unlock
 			end
 			
-			
 			process = proc {
 				begin
 					if !error?
@@ -369,17 +373,17 @@ module Control
 					#
 					# Trigger last sent here (defered to prevent locking on reactor)
 					#
+					@last_send_at = Time.now.to_f
 					EM.defer do
 						@confirm_send_lock.synchronize {
-							@last_send_at = Time.now.to_f
-							@sent_condition.signal
+							@sent_condition.broadcast
 						}
 					end
 				end
 			}
-
-			@confirm_send_lock.synchronize {
-				@receive_lock.synchronize {
+			
+			@receive_lock.synchronize {
+				@confirm_send_lock.synchronize {
 					#
 					# Provides non-blocking delays on data being sent
 					# 	The delay may be longer than specified, never shorter.
@@ -396,7 +400,11 @@ module Control
 					# Synchronize the response
 					#
 					if data[:wait]
-						wait_response
+						begin
+							wait_response
+						ensure
+							@wait_condition.broadcast	# The datapacket is free for overwriting
+						end
 					end
 				}
 			}
@@ -413,23 +421,23 @@ module Control
 			begin
 				@wait_condition.wait(@receive_lock, timeout)
 				
-				data = nil
-				@status_lock.synchronize {
-					data = @last_command.delete(:response)
-				}
-				if data.nil?	# The wait timeout occured - retry command
+				if @data_packet.nil?	# The wait timeout occured - retry command
 					@logger.debug "-- module #{@parent.class} in device_connection.rb, wait_response --"
 					@logger.debug "A response was not recieved for the current command"
 					attempt_retry
 					return
 				else					# Process the data
-					response = process_data(data)
+					response = process_data(@data_packet)
+					@data_packet = nil
+					
 					if response == false
 						attempt_retry
 						return
 					elsif response == true
 						return
 					end
+					
+					@wait_condition.broadcast	# A nil response (we need the next data)
 				end
 				#
 				# If we haven't returned before we reach this point then the last data was

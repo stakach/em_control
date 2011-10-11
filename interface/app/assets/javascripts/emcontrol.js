@@ -92,8 +92,11 @@ var acaControl = {
 				bindings[event_name] = bindings[event_name] || [];
 				bindings[event_name].push(callback);
 				
-				if (!system_calls[event_name] && state.connection.readyState == state.connection.OPEN)
-					send('register', event_name.split('.'));
+				if (!system_calls[event_name] && state.connection.readyState == state.connection.OPEN){
+					var args = event_name.split('.');
+					args.splice(0,0, 'register');
+					send.apply( this, args );
+				}
 			});
 			
 			return this; // chainable
@@ -106,8 +109,11 @@ var acaControl = {
 		this.unbind = function (event_name) {
 			delete bindings[event_name];
 			
-			if (state.connection.readyState == state.connection.OPEN)
-				send('unregister', event_name.split('.'));
+			if (state.connection.readyState == state.connection.OPEN){
+				var args = event_name.split('.');
+				args.splice(0,0, 'unregister');
+				send.apply( this, args );
+			}
 			
 			return this; // chainable
 		};
@@ -163,8 +169,11 @@ var acaControl = {
 					//
 					for (event_name in bindings) {
 						try {
-							if(!system_calls[event_name])
-								send('register', event_name.split('.'));
+							if(!system_calls[event_name]) {
+								var args = event_name.split('.');
+								args.splice(0,0, 'register');
+								send.apply( this, args );
+							}
 						} catch (err) { }
 					}
 					

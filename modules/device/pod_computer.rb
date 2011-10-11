@@ -67,13 +67,17 @@ class PodComputer < Control::Device
 		#
 		# Remove the start character and grab the message
 		#
-		data = array_to_str(data).split("" << 0x02)[-1]
+		data = array_to_str(data).split("" << 0x02)		
+		if data.length >= 2
+			data = data[-1]	# valid response
+		else
+			return true	# Invalid data (we shall ignore)
+		end
 		
 		#
 		# Convert the message into a naitive object
 		#
 		data = JSON.parse(data, {:symbolize_names => true})
-		logger.debug "-- COMPUTER, sent: #{data.inspect}"
 		
 		#
 		# Process the response
@@ -93,14 +97,16 @@ class PodComputer < Control::Device
 				do_send(command)
 			end
 			@authenticated += 1
-			logger.debug "-- COMPUTER, requested authentication"
+			logger.debug "-- Pod Computer, requested authentication"
 		elsif data[:type] != nil
-			self[data[:type].to_sym] = data[:data]	# zoom, tilt, pan
+			self["#{data[:device]}_#{data[:type]}"] = data	# zoom, tilt, pan
+			return nil	# This is out of order data
 		else
 			if !data[:result]
-				logger.debug "-- COMPUTER, request failed for command: #{array_to_str(last_command)}"
+				logger.debug "-- Pod Computer, request failed for command: #{array_to_str(last_command)}"
 				return false
 			end
+			logger.debug "-- Pod Computer, SUCCESS"
 		end
 		
 		return true # Command success
