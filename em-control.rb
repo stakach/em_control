@@ -6,7 +6,7 @@ require 'yaml'
 require 'thread'
 require 'monitor'
 require 'Socket'	# for DNS lookups (EM isn't every good at this)
-
+require 'Logger'
 
 
 #
@@ -14,10 +14,6 @@ require 'Socket'	# for DNS lookups (EM isn't every good at this)
 #
 require 'rubygems'
 require 'eventmachine'
-require 'log4r'
-require "log4r/formatter/log4jxmlformatter"
-require "log4r/outputter/udpoutputter"
-
 
 
 #
@@ -40,55 +36,44 @@ require File.dirname(__FILE__) + '/control/core/tcp_control.rb'
 
 
 module Control
-
-	DEBUG = 1
-	INFO = 2
-	WARN = 3
-	ERROR = 4
-	FATAL = 5
 	
 	ROOT_DIR = File.dirname(__FILE__)
+	
+	
+	def self.get_log_level(level)
+		if level.nil?
+			return Logger::INFO
+		else
+			return case level.downcase.to_sym
+				when :debug
+					Logger::DEBUG
+				when :warn
+					Logger::WARN
+				when :error
+					Logger::ERROR
+				else
+					Logger::INFO
+			end
+		end
+	end
 	
 	#
 	# Load the config file and start the modules
 	#
 	def self.set_log_level(level)
-		if level.nil?
-			@logLevel = INFO
-		else
-			@logLevel = case level.downcase.to_sym
-				when :debug
-					DEBUG
-				when :warn
-					WARN
-				when :error
-					ERROR
-				else
-					INFO
-			end
-		end
-		
-		#
-		# Console output
-		#
-		console = Log4r::StdoutOutputter.new 'console'
-		console.level = @logLevel
-		
-		#
-		# Chainsaw output (live UDP debugging)
-		#
-		log4jformat = Log4r::Log4jXmlFormatter.new
-		udpout = Log4r::UDPOutputter.new 'udp', {:hostname => "localhost", :port => 8071}
-		udpout.formatter = log4jformat
+		@logLevel = get_log_level(level)
 		
 		#
 		# System level logger
 		#
-		System.logger = Log4r::Logger.new("system")
-		file = Log4r::RollingFileOutputter.new("system", {:maxsize => 4194304, :filename => "#{ROOT_DIR}/interface/log/system.log"})	# 4mb file
-		file.level = @logLevel
-			
-		System.logger.add(Log4r::Outputter['console'], Log4r::Outputter['udp'], file)
+		if @logLevel == Logger::DEBUG
+			System.logger = Logger.new(STDOUT)
+		else
+			System.logger = Logger.new("#{ROOT_DIR}/interface/log/system.log", 10, 4194304)
+		end
+		System.logger.formatter = proc { |severity, datetime, progname, msg|
+			"#{severity}: #{System} - #{msg}\n"
+		}
 	end
 	
 	def self.start
@@ -102,7 +87,14 @@ module Control
 			# Load the system based on the database
 			#
 			ControlSystem.all.each do |controller|
+				begin
+				System.logger.debug "Booting #{controller.name}"
 				System.new(controller, @logLevel)
+				rescue => e
+					System.logger.error "error during boot"
+					System.logger.error e.message
+					System.logger.error e.backtrace
+				end
 			end
 			
 			#

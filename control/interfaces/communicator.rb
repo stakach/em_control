@@ -17,11 +17,35 @@ class Communicator
 		
 		@status_register = {}
 		@connected_interfaces = {}
+		
+		@shutdown = true
 	end
 	
 
 	def logger
 		@system.logger
+	end
+	
+	
+	def shutdown
+		@status_lock.synchronize {
+			@shutdown = true
+			@system.modules.each_value do |mod|
+				mod.instance.delete_observer(self)
+			end
+			@status_register = {}			
+			@connected_interfaces.each_key do |soc|
+				soc.shutdown
+			end
+		}
+		logger.debug "-- Communicator shutdown"
+	end
+	
+	def start(nolog = false)			# Logging isn't active for the very first of these
+		@status_lock.synchronize {
+			@shutdown = false
+		}
+		logger.debug "-- Communicator started" unless nolog
 	end
 
 	
@@ -30,8 +54,8 @@ class Communicator
 	#
 	def self.system_list(user)
 		response = {:ids => [], :names => []}
-		user.control_systems.select('control_systems.id, control_systems.name').each do |controller|
-			if !!System.systems[controller.name.to_sym]
+		user.control_systems.where('active = ?', true).select('control_systems.id, control_systems.name').each do |controller|
+			if !!System[controller.name.to_sym]
 				response[:ids] << controller.id
 				response[:names] << controller.name
 			end
@@ -45,12 +69,17 @@ class Communicator
 	#
 	def self.select(user, interface, system)
 		System.logger.debug "-- Interface #{interface.class} attempting to select system #{system}"
-		sys = user.control_systems.select('control_systems.name').where('control_systems.id = ?', system.to_i).first
-		system = sys.nil? ? nil : sys.name.to_sym
-		return nil if System.systems[system].nil?
-		
-		System.logger.debug "-- Interface #{interface.class} selected system #{system}"
-		return System.systems[system].communicator.attach(interface)
+		if system == 0
+			return nil unless user.system_admin
+			System.communicator.attach(interface)
+		else
+			sys = user.control_systems.select('control_systems.name').where('control_systems.id = ? AND active = ?', system.to_i, true).first
+			system = sys.nil? ? nil : sys.name.to_sym
+			return nil if System[system].nil?
+			
+			System.logger.debug "-- Interface #{interface.class} selected system #{system}"
+			return System[system].communicator.attach(interface)
+		end
 	end
 
 
@@ -228,18 +257,19 @@ class Communicator
 		end
 	end
 	
-
+	
 	def attach(interface)
 		@status_lock.synchronize {
+			return nil if @shutdown
 			@connected_interfaces[interface] = [] unless @connected_interfaces.include?(interface)
 		}
 		return self
 	end
-
-
+	
+	
 	protected
-
-
+	
+	
 	def unregister_all(interface)
 		# TODO:: Important to stop memory leaks
 	end

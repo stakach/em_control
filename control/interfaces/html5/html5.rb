@@ -58,10 +58,9 @@ class HTML5Monitor
 	#
 	#
 	def try_auth(data = nil)
-		if @ignoreAuth
-			return false
-		end
 		
+		return false if @ignoreAuth
+
 		if !!@user
 			if data.nil?
 				return true
@@ -90,16 +89,28 @@ class HTML5Monitor
 			# Prevent DOS/brute force Attacks
 			#
 			@ignoreAuth = true
-			EventMachine::Timer.new(3) do
-				@socket.send(JSON.generate({:event => "authenticate", :data => []}))
-				@ignoreAuth = false
+			EventMachine::Timer.new(5) do
+				begin
+					@socket.send(JSON.generate({:event => "authenticate", :data => []}))
+				ensure
+					@ignoreAuth = false
+				end
 			end
 		end
 		return false
 	end
 	
 	def send_system
-		@socket.send(JSON.generate({:event => "system", :data => []}))
+		return if @ignoreSys
+		
+		@ignoreSys = true
+		EventMachine::Timer.new(5) do
+			begin
+				@socket.send(JSON.generate({:event => "system", :data => []}))
+			ensure
+				@ignoreSys = false
+			end
+		end
 	end
 
 
@@ -192,10 +203,15 @@ class HTML5Monitor
 		logger.error e.backtrace
 	end
 	
+	def shutdown
+		@socket.close_websocket
+	end
+	
 	def notify(mod_sym, stat_sym, data)
 		#
 		# This should be re-entrant? So no need to protect
 		#
+		@system.logger.debug "#{mod_sym}.#{stat_sym} sent #{data.inspect}"
 		@socket.send(JSON.generate({"event" => "#{mod_sym}.#{stat_sym}", "data" => data}))
 	end
 end

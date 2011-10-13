@@ -8,7 +8,7 @@ module Control
 		include DeviceConnection
 		
 		def do_send_data(data)
-			$datagramServer.do_send_data(DeviceModule.lookup[@parent], data)
+			$datagramServer.do_send_data(DeviceModule.lookup(@parent), data)
 		end
 	end
 
@@ -64,7 +64,7 @@ module Control
 				# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
 				# => Use the non-blocking resolver in the future
 				#
-				ip = Addrinfo.tcp(scheme.ip, 80).ip_address
+				ip = Addrinfo.udp(scheme.ip, 80).ip_address
 				text = "#{scheme.ip}:#{scheme.port}"
 				old_ip = @ips[text]
 				if old_ip != ip
@@ -89,7 +89,7 @@ module Control
 					# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
 					# => Use the non-blocking resolver in the future
 					#
-					ip = Addrinfo.tcp(scheme.ip, 80).ip_address
+					ip = Addrinfo.udp(scheme.ip, 80).ip_address
 					@devices["#{ip}:#{scheme.port}"] = device
 					@ips["#{scheme.ip}:#{scheme.port}"] = ip
 				rescue => e

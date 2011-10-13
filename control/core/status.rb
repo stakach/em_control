@@ -5,12 +5,14 @@ module Control
 
 
 		def [] (status)
+			status = status.to_sym if status.class == String
 			@status_lock.synchronize {
 				@status[status]
 			}
 		end
 		
 		def []= (status, data)
+			status = status.to_sym if status.class == String
 			old_data = nil
 			@status_lock.synchronize {
 				old_data = @status[status]

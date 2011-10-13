@@ -106,7 +106,6 @@ class PodComputer < Control::Device
 				logger.debug "-- Pod Computer, request failed for command: #{array_to_str(last_command)}"
 				return false
 			end
-			logger.debug "-- Pod Computer, SUCCESS"
 		end
 		
 		return true # Command success

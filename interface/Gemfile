@@ -12,7 +12,6 @@ gem 'bcrypt-ruby'
 gem 'pg'
 gem 'eventmachine', "~>1.0.0.beta" 
 gem 'em-websocket'
-gem 'log4r'
 
 
 #

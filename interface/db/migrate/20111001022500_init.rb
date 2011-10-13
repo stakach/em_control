@@ -45,6 +45,8 @@ class Init < ActiveRecord::Migration
 			
 			t.integer	:priority,	:default => 0
 			
+			t.string	:custom_name	# projector_left
+			
 			t.timestamps
 		end
 		
@@ -53,6 +55,8 @@ class Init < ActiveRecord::Migration
 			t.references	:dependency,	:allow_null => false
 			
 			t.integer		:priority,	:default => 0
+			
+			t.string		:custom_name
 			
 			t.timestamps
 		end

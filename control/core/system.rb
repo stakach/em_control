@@ -1,59 +1,65 @@
 module Control
 	class System
 
-		@@systems = {}		# system_name => system instance
-		@@controllers = {}	# controller_id => system instance
+		@@systems = {:'---GOD---' => self}		# system_name => system instance
+		@@controllers = {}						# controller_id => system instance
 		@@logger = nil
-
-		def initialize(controller, log_level)
-			super
-
+		@@communicator = Control::Communicator.new(self)
+		@@communicator.start(true)
+		@@god_lock = Mutex.new
+		
+		
+		def self.new_system(controller, log_level = Logger::INFO)
+			controller = ControlSystem.find(controller) if controller.class == Fixnum
+			controller = ControlSystem.where('name = ?', controller).first if controller.class == String
+			
+			@@god_lock.lock
 			if @@controllers[controller.id].nil?
-
-				@modules = {}	# controller modules	:name => module instance (device or logic)
-				@communicator = Control::Communicator.new(self)
-				@log_level = log_level
-		
-				@logger = Log4r::Logger.new("#{controller.name}")
-				file = Log4r::RollingFileOutputter.new(controller.name, {:maxsize => 4194304, :filename => "#{ROOT_DIR}/interface/log/#{controller.name}.log"})	# 4mb file
-				file.level = log_level
-				@logger.add(Log4r::Outputter['console'], Log4r::Outputter['udp'], file)	# common console output for all venues
-
-				#
-				# Setup the systems links
-				#
-				@@systems[controller.name.to_sym] = self
-				@@controllers[controller.id] = self
-		
-				#
-				# Load the modules ()
-				#	
-				#Dependency.for_controller(controller).each do |dep|
-				#	if @@modules[dep.id].nil?
-				#		controller.reload_module(dep)		# This is the re-load code function (live bug fixing - removing functions does not work)
-				#	end
-				#end
-			
-				controller.devices.includes(:dependency).each do |device|
-					load_hooks(device, DeviceModule.new(device))
-				end
-			
-				controller.logics.includes(:dependency).each do |logic|
-					load_hooks(logic, LogicModule.new(logic))
-				end
+				@@god_lock.unlock
+				System.new(controller, log_level)
 			else
-				#
-				# TODO:: Check for changes and update the system instance
-				#	Update system name on existing instance and the name references to that instance
-				#	clear existing hooks
-				#	update hooks
-				#	Change log level if required
-				#
-				#	TODO:: requires a lock around hooks (so can't read and update at the same time)
-				#
+				@@god_lock.unlock
 			end
 		end
-	
+		
+		
+		#
+		# Reloads a dependency live
+		#	This is the re-load code function (live bug fixing - removing functions does not work)
+		#
+		def self.reload(dep)
+			dep = Dependency.find(dep)
+			Modules.load_module(dep)
+			
+			updated = {}
+			dep.devices.select('id').each do |dev|
+				begin
+					inst = DeviceModule.instance_of(dev.id)
+					inst.do_update if (!!updated[inst]) && inst.respond_to?(:on_update)
+				ensure
+					updated[inst] = true
+				end
+			end
+			
+			updated = {}
+			dep.logics.select('id').each do |log|
+				begin
+					inst = LogicModule.instance_of(log.id)
+					inst.do_update if (!!updated[inst]) && inst.respond_to?(:on_update)
+				ensure
+					updated[inst] = true
+				end
+			end
+		end
+		
+		#
+		# Allows for system updates on the fly
+		#	Dangerous (Could be used to add on the fly interfaces)
+		#
+		def self.force_load_file(path)
+			load ROOT_DIR + path
+		end
+		
 		
 		#
 		# System Logger
@@ -66,18 +72,42 @@ module Control
 			@@logger = log
 		end
 		
-		def self.controllers
-			@@controllers
-		end
+		#def self.controllers
+		#	@@controllers
+		#end
 	
-		def self.systems
-			@@systems
+		#def self.systems
+		#	@@systems
+		#end
+		
+		def self.communicator
+			@@communicator
 		end
 		
 		def self.[] (system)
 			system = system.to_sym if system.class == String
-			@@systems[system]
+			@@god_lock.synchronize {
+				@@systems[system]
+			}
 		end
+		
+		
+		
+		#
+		# For access via communicator as a super user
+		#
+		def self.modules
+			self
+		end
+		def self.instance
+			self
+		end
+		def instance
+			self
+		end
+		# ---------------------------------
+		
+		
 	
 		#
 		#	Module accessor
@@ -90,19 +120,145 @@ module Control
 		attr_reader :modules
 		attr_reader :communicator
 		attr_accessor :logger
+		
+		
+		
+		#
+		# Starts the control system if not running
+		#
+		def start(force = false)
+			System.logger.info "starting #{@controller.name}"
+			@sys_lock.synchronize {
+				@@god_lock.synchronize {
+					@@systems.delete(@controller.name.to_sym)
+					@controller.reload(:lock => true)
+					@@systems[@controller.name.to_sym] = self
+				}
+				
+				if !@controller.active || force
+					
+					if @logger.nil?
+						if @log_level == Logger::DEBUG
+							@logger = Logger.new(STDOUT)
+						else
+							@logger = Logger.new("#{ROOT_DIR}/interface/log/system_#{@controller.id}.log", 10, 4194304)
+						end
+						@logger.formatter = proc { |severity, datetime, progname, msg|
+							"#{severity}: #{@controller.name} - #{msg}\n"
+						}
+					end
+					
+					@controller.devices.includes(:dependency).each do |device|
+						load_hooks(device, DeviceModule.new(self, device))
+					end
+				
+					@controller.logics.includes(:dependency).each do |logic|
+						load_hooks(logic, LogicModule.new(self, logic))
+					end
+				end
+				
+				@controller.active = true
+				@controller.save
+				
+				@communicator.start
+			}
+		end
+		
+		#
+		# Stops the current control system
+		# 	Loops through the module instances.
+		#
+		def stop
+			System.logger.info "stopping #{@controller.name}"
+			@sys_lock.synchronize {
+				stop_nolock
+			}
+		end
+		
+		#
+		# Unload and then destroy self
+		#
+		def delete
+			System.logger.info "deleting #{@controller.name}"
+			@sys_lock.synchronize {
+				stop_nolock
+				
+				@@god_lock.synchronize {
+					@@systems.delete(@controller.name.to_sym)
+					@@controllers.delete(@controller.id)
+				}
+				
+				begin
+					@controller.destroy!
+				rescue
+					# Controller may already be deleted
+				end
+				@modules = nil
+			}
+		end
+		
+		
+		#
+		# Log level changing on the fly
+		#
+		def log_level(level)
+			@sys_lock.synchronize {
+				@log_level = Control::get_log_level(level)
+				if @controller.active
+					@logger.level = @log_level
+				end
+			}
+		end
+		
 	
-
 		protected
+		
+		
+		def stop_nolock
+			
+			begin
+				@@god_lock.synchronize {
+					@@systems.delete(@controller.name.to_sym)
+					@controller.reload(:lock => true)
+					@@systems[@controller.name.to_sym] = self
+				}
+			rescue
+				# Assume controller may have been deleted
+			end
+			
+			if @controller.active
+				@communicator.shutdown
+				modules_unloaded = {}
+				@modules.each_value do |mod|
+					
+					if modules_unloaded[mod] == nil
+						modules_unloaded[mod] = :unloaded
+						mod.unload
+					end
+					
+				end
+				@modules = {}	# Modules no longer referenced. Cleanup time!
+				@logger.close
+				@logger = nil
+			end
+			
+			@controller.active = false
+			begin
+				@controller.save
+			rescue
+				# Assume controller may have been deleted
+			end
+		end
 	
 	
 		def load_hooks(device, mod)
 			module_name = device.dependency.module_name
-			count = 2
+			count = 2	# 2 is correct
 			
 			#
 			# Loads the modules and auto-names them (display_1, display_2)
 			#	The first module of a type has two names (display and display_1 for example)
-			#	TODO:: ensure load order
+			#	Load order is controlled by the control_system model based on the ordinal
 			#
 			if not @modules[module_name.to_sym].nil?
 				while @modules["#{module_name}_#{count}".to_sym].nil?
@@ -113,6 +269,37 @@ module Control
 				@modules["#{module_name}_1".to_sym] = mod
 			end
 			@modules[module_name.to_sym] = mod
+			
+			#
+			# Allow for system specific custom names
+			#
+			if !device.custom_name.nil?
+				@modules[device.custom_name.to_sym] = mod
+			end
+		end
+		
+		
+		def initialize(controller, log_level)
+			super
+			
+			@modules = {}	# controller modules	:name => module instance (device or logic)
+			@communicator = Control::Communicator.new(self)
+			@log_level = log_level
+			@controller = controller
+			@sys_lock = Mutex.new
+			
+			
+			#
+			# Setup the systems links
+			#
+			@@systems[@controller.name.to_sym] = self
+			@@god_lock.synchronize {
+				@@controllers[@controller.id] = self
+			}
+			
+			if @controller.active
+				start(true)			# as this is loading the first time we ignore controller active
+			end
 		end
 	end
 end

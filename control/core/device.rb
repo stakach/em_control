@@ -5,15 +5,17 @@ module Control
 		include Constants
 		include Utilities
 		
-		def initialize(system)
-			@system = system
+		def initialize(tls)
+			@systems = []
 
 			#
 			# Status variables
 			#	NOTE:: if changed then change in logic.rb 
 			#
+			@secure_connection = tls
 			@status = {}
 			@status_lock = Mutex.new
+			@system_lock = Mutex.new
 			@status_emit = {}	# status => condition_variable
 		end
 
@@ -24,6 +26,20 @@ module Control
 		def setbase(base)
 			@base = base
 		end
+		
+		
+		def join_system(system)
+			@system_lock.synchronize {
+				@systems << system
+			}
+		end
+		
+		def leave_system(system)
+			@system_lock.synchronize {
+				@systems.delete(system)
+				return @systems.length
+			}
+		end
 
 	
 		def last_command	# get the last command sent that was (this is very contextual)
@@ -32,7 +48,10 @@ module Control
 		
 
 		def logger
-			@system.logger
+			@system_lock.synchronize {
+				return @systems[0].logger unless @systems.empty?
+			}
+			System.logger
 		end
 		
 
@@ -40,23 +59,23 @@ module Control
 		# required by base for send logic
 		#
 		attr_reader :status_lock
+		attr_reader :secure_connection
+		attr_reader :systems
+		attr_reader :base
 		
 
 		protected
 		
-
-		attr_reader :system
-		attr_reader :base
 		
 		#
 		# Configuration and settings
 		#
 		def config
-			DeviceModule.lookup[self]
+			DeviceModule.lookup(self)
 		end
 		
 		def setting(name)
-			val = DeviceModule.lookup[self].settings.where("name = ?", name).first || DeviceModule.lookup[self].dependency.settings.where("name = ?", name).first
+			val = config.settings.where("name = ?", name).first || config.dependency.settings.where("name = ?", name).first
 			
 			if !val.nil?
 				case val.value_type
