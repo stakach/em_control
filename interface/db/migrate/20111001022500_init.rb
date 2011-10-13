@@ -133,11 +133,11 @@ class Init < ActiveRecord::Migration
 			t.references	:user,			:allow_null => false
 			t.references	:control_system,:allow_null => false
 			
-			t.string	:trusted_by,		:allow_null => false
 			t.string	:description,		:allow_null => false
 			t.text		:notes
 			
 			t.string	:one_time_key
+			t.string	:next_key
 			t.datetime	:expires			# Expire devices (staff member leaving etc)
 			t.datetime	:last_authenticated	# Cache update indicator
 			

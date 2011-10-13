@@ -54,10 +54,19 @@ class Communicator
 	#
 	def self.system_list(user)
 		response = {:ids => [], :names => []}
-		user.control_systems.where('active = ?', true).select('control_systems.id, control_systems.name').each do |controller|
-			if !!System[controller.name.to_sym]
-				response[:ids] << controller.id
-				response[:names] << controller.name
+		
+		if user[:id].present?
+			user.control_systems.where('active = ?', true).select('control_systems.id, control_systems.name').each do |controller|
+				if !!System[controller.name.to_sym]
+					response[:ids] << controller.id
+					response[:names] << controller.name
+				end
+			end
+		elsif user[:login].present?
+			system = User.find(user[:login]).control_systems.where('control_systems.active = ? AND control_systems.id = ?', true, user[:system]).first
+			if system.present?
+				response[:ids] << system.id
+				response[:names] << system.name
 			end
 		end
 		return response
@@ -70,10 +79,19 @@ class Communicator
 	def self.select(user, interface, system)
 		System.logger.debug "-- Interface #{interface.class} attempting to select system #{system}"
 		if system == 0
-			return nil unless user.system_admin
+			return nil unless user[:system_admin]
 			System.communicator.attach(interface)
 		else
-			sys = user.control_systems.select('control_systems.name').where('control_systems.id = ? AND active = ?', system.to_i, true).first
+			sys = nil
+			
+			if user[:id].present?
+				sys = user.control_systems.select('control_systems.name').where('control_systems.id = ? AND control_systems.active = ?', system.to_i, true).first
+				
+			elsif user[:login].present? && user[:system] == system.to_i
+				sys = User.find(user[:login]).control_systems.select('control_systems.name').where('control_systems.id = ? AND control_systems.active = ?', system.to_i, true).first
+				
+			end
+			
 			system = sys.nil? ? nil : sys.name.to_sym
 			return nil if System[system].nil?
 			

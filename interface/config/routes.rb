@@ -30,8 +30,9 @@ Interface::Application.routes.draw do
   #     resources :comments, :sales
   #     resource :seller
   #   end
-	resources :controls do
-		resources :interfaces
+	resources :tokens do
+		post	:authenticate,	:on => :collection
+		post	:accept,		:on => :collection
 	end
 
   # Sample resource route with more complex sub-resources
