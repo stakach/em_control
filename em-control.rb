@@ -66,10 +66,10 @@ module Control
 		#
 		# System level logger
 		#
-		if @logLevel == Logger::DEBUG
-			System.logger = Logger.new(STDOUT)
-		else
+		if Rails.env.production?
 			System.logger = Logger.new("#{ROOT_DIR}/interface/log/system.log", 10, 4194304)
+		else
+			System.logger = Logger.new(STDOUT)
 		end
 		System.logger.formatter = proc { |severity, datetime, progname, msg|
 			"#{severity}: #{System} - #{msg}\n"

@@ -138,10 +138,10 @@ module Control
 				if !@controller.active || force
 					
 					if @logger.nil?
-						if @log_level == Logger::DEBUG
-							@logger = Logger.new(STDOUT)
-						else
+						if Rails.env.production?
 							@logger = Logger.new("#{ROOT_DIR}/interface/log/system_#{@controller.id}.log", 10, 4194304)
+						else
+							@logger = Logger.new(STDOUT)
 						end
 						@logger.formatter = proc { |severity, datetime, progname, msg|
 							"#{severity}: #{@controller.name} - #{msg}\n"
@@ -238,7 +238,7 @@ module Control
 					
 				end
 				@modules = {}	# Modules no longer referenced. Cleanup time!
-				@logger.close
+				@logger.close if Rails.env.production?
 				@logger = nil
 			end
 			
