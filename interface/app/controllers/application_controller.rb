@@ -1,12 +1,12 @@
 class ApplicationController < ActionController::Base
 	protect_from_forgery
-	before_filter :authenticate, :except => :authenticate
+	before_filter :auth_user, :except => :authenticate
 	
 	
 	protected
 	
 	
-	def authenticate
+	def auth_user
 		redirect_to root_path unless session[:user].present? || session[:token].present?
 	end
 	

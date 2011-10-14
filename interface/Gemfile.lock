@@ -17,6 +17,12 @@ PATH
       encryptor
       rails (~> 3.1.0)
 
+PATH
+  remote: vendor/interfaces/podsystem
+  specs:
+    podsystem (0.0.1)
+      rails (~> 3.1.1)
+
 GEM
   remote: http://rubygems.org/
   specs:
@@ -146,6 +152,7 @@ DEPENDENCIES
   jquery-rails
   login!
   pg
+  podsystem!
   rails (= 3.1.1)
   rails_admin!
   sass-rails (~> 3.1.4)

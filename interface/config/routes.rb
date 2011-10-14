@@ -31,7 +31,9 @@ Interface::Application.routes.draw do
   #     resource :seller
   #   end
 	resources :tokens do
+		post	:ask,			:on => :collection
 		post	:authenticate,	:on => :collection
+		get		:key,			:on => :collection
 		post	:accept,		:on => :collection
 	end
 

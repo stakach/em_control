@@ -61,13 +61,7 @@ class Communicator
 					response[:ids] << controller.id
 					response[:names] << controller.name
 				end
-			end
-		elsif user[:login].present?
-			system = User.find(user[:login]).control_systems.where('control_systems.active = ? AND control_systems.id = ?', true, user[:system]).first
-			if system.present?
-				response[:ids] << system.id
-				response[:names] << system.name
-			end
+			end 	# We ignore token requests here as they should know the system they can connect to
 		end
 		return response
 	end
@@ -89,7 +83,17 @@ class Communicator
 				
 			elsif user[:login].present? && user[:system] == system.to_i
 				sys = User.find(user[:login]).control_systems.select('control_systems.name').where('control_systems.id = ? AND control_systems.active = ?', system.to_i, true).first
-				
+				if sys.nil?
+					#
+					# Kill comms, this key is not valid
+					#	Invalidate key
+					#
+					entry = TrustedDevice.where("one_time_key = ? or next_key = ?", key, key).first
+					entry.expires = Time.now
+					entry.save
+					interface.shutdown
+					return nil
+				end
 			end
 			
 			system = sys.nil? ? nil : sys.name.to_sym

@@ -26,6 +26,9 @@
 **/
 
 
+
+
+
 var acaControl = {
 	Off: false,
 	On: true,
@@ -37,7 +40,7 @@ var acaControl = {
 		var config = {
 			url: null,			// URL of the ACA Control Server
 			system: null,		// The system we are connecting to and authentication details for re-connects
-			one_time_key: null	// URL for obtaining the cached one time key
+			auto_auth: null		// Are we using the manifest authentication system
 		},
 			state ={
 				connection: null,	// Base web socket
@@ -125,10 +128,12 @@ var acaControl = {
 			var chain = bindings[event_name];
 			if (chain === undefined) return; // no bindings for this event
 			
-			var i;
+			var i, result;
 			for (i = 0; i < chain.length; i = i + 1) {
 				try {
-					chain[i](message);
+					result = chain[i](message);
+					if(result === false)	// Return false to prevent later bindings
+						break;
 				} catch (err) { } // Catch any user code errors
 			}
 			
@@ -215,6 +220,123 @@ var acaControl = {
 		}
 		state.resume = window.setInterval(checkResume, 1000);
 		acaControl.Controllers.push(this);
+		
+		
+		//
+		// Bind events for automation (first attempt, else fall back to interface for both auth and system)
+		//
+		var appCache = window.applicationCache,
+			authCount = 0,
+			keyAuthed = false,
+			oneKey;
+			
+		this.bind('authenticate', function(){
+			authCount += 1;
+			
+			if(authCount == 1 && (!!config.auto_auth) && (!!config.system)) {
+				jQuery.ajax('/tokens/key', {
+					type: 'GET',
+					dataType: 'text',
+					success: function(data, textStatus, jqXHR){
+						oneKey = data;
+						send("authenticate", oneKey);
+					},
+					error: function(){
+						keyAuthed = true;	// allow the external system to update the cache
+						send("authenticate", 'failed');		// Triggers the user interface
+					}
+				});
+				
+				return false;
+			}
+		});
+		
+		var sysCallCount = 0;
+		this.bind('system', function(){
+			sysCallCount += 1;
+			
+			if(sysCallCount == 1 && (!!config.system)) {
+				controller.send("system", config.system);
+				
+				return false;
+			}	// Auto login failure here will result in a disconnect
+		});
+		
+		this.bind('ready', function(){
+			if((!!config.auto_auth) && (!!config.system) && sysCallCount == 1 && authCount == 1) {
+				//
+				// Authenticate with the server
+				// Then we can safely reload the cache
+				// on cache success we accept the new key
+				//
+				jQuery.ajax('/tokens/authenticate', {
+					type: 'POST',
+					data: {
+						key: oneKey,
+						system: config.system
+					},
+					dataType: 'text',
+					success: function(data, textStatus, jqXHR){
+						// trigger manifest update
+						// Then call accept (from manifest event)
+						keyAuthed = true;
+						appCache.update();
+						
+					},
+					error: function(){
+						//
+						// This can safely be ignored. Here for debugging
+						//
+						var damn = "fail";
+					}
+				});
+			}
+			
+			authCount = 0;
+			sysCallCount = 0;
+			oneKey = null;
+		});
+		
+		
+		function bindCache(){
+			$(appCache).bind('checking', function(){
+				if(!!keyAuthed){
+					appCache.abort();
+					return false;
+				}
+			});
+			
+			$(appCache).bind('updateready', function(){
+				appCache.swapCache();	// Swap cache has called key
+				appCache = window.applicationCache;
+				bindCache();
+				
+				jQuery.ajax('/tokens/accept', {
+					type: 'POST',
+					data: {
+						key: oneKey,
+						system: config.system
+					},
+					dataType: 'text',
+					success: function(data, textStatus, jqXHR){
+						//
+						// This can safely be ignored. Here for debugging
+						//
+						var yay = "success";
+					},
+					error: function(){
+						//
+						// This can safely be ignored. Here for debugging
+						//
+						var damn = "fail";
+					}
+				});
+			});
+		}
+		
+		if((!!config.auto_auth) && (!!config.system)) {
+			bindCache();
+		}
 		
 		//
 		// Disconnects and removes the self reference to the object

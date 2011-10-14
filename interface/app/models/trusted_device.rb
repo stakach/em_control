@@ -60,5 +60,5 @@ class TrustedDevice < ActiveRecord::Base
 	end
 	
 	
-	validates_presence_of :user, :control_system, :description
+	validates_presence_of :user, :control_system, :reason
 end
