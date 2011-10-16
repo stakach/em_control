@@ -1,6 +1,6 @@
 class ApplicationController < ActionController::Base
 	protect_from_forgery
-	before_filter :auth_user, :except => :authenticate
+	before_filter :auth_user, :except => [:authenticate, :manifest]
 	
 	
 	protected
