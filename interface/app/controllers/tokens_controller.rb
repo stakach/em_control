@@ -1,3 +1,5 @@
+require 'uri'
+
 class TokensController < ApplicationController
 	
 	def authenticate	# Allowed through by application controller
@@ -6,11 +8,13 @@ class TokensController < ApplicationController
 		# check the system matches (set user and system in session)
 		# respond with success
 		#
-		info = TrustedDevice.try_to_login(params[:key], true)	# true means gen the next key
-		if params[:system].present? && params[:system].to_i == info[:system]
-			session[:token] = info[:login]
-			session[:system] = info[:system]
+		dev = TrustedDevice.try_to_login(params[:key], true)	# true means gen the next key
+		if params[:system].present? && params[:system].to_i == dev.control_system_id
+			reset_session unless session[:user].present?
+			session[:token] = dev.user_id
+			session[:system] = dev.control_system_id
 			session[:key] = params[:key]
+			cookies.permanent[:next_key] = {:value => dev.next_key, :path => URI.parse(request.referer).path}
 			
 			render :nothing => true, :layout => false	# success!
 		else
@@ -18,37 +22,12 @@ class TokensController < ApplicationController
 		end
 	end
 	
-	def key
-		#
-		# Application controller ensures we are logged in
-		# grab information out of the session
-		# swap the keys
-		# respond with success
-		#
-		
-		if session[:token].nil?
-			render :text => "no auth", :layout => false
-			return
-		end
-		
-		dev = TrustedDevice.where('user_id = ? AND control_system_id = ? AND one_time_key = ? AND expires > ?', 
-				session[:token], session[:system], session[:key], Time.now).first
-				
-		if dev.present? && dev.next_key != dev.one_time_key	# Prevents calling after accepted
-			
-			render :text => dev.next_key, :layout => false
-		else
-			render :text => "no auth", :layout => false
-		end
-	end
-	
 	
 	def accept
-		dev = TrustedDevice.where('user_id = ? AND control_system_id = ? AND one_time_key = ? AND expires > ?', 
+		dev = TrustedDevice.where('user_id = ? AND control_system_id = ? AND one_time_key = ? AND (expires IS NULL OR expires > ?)', 
 				session[:token], session[:system], session[:key], Time.now).first
 				
-		if dev.present? && dev.next_key != dev.one_time_key	# Can only call once
-			
+		if dev.present?
 			dev.accept_key
 			render :nothing => true, :layout => false	# success!
 		else
@@ -57,7 +36,7 @@ class TokensController < ApplicationController
 	end
 	
 	
-	def ask
+	def create
 		#
 		# Application controller ensures we are logged in as real user
 		# Ensure the user can access the control system requested (the control system does this too)
@@ -73,10 +52,7 @@ class TokensController < ApplicationController
 			dev.save
 			
 			if !dev.new_record?
-				session[:token] = user.id
-				session[:system] = sys.id
-				session[:key] = dev.one_time_key
-				
+				cookies.permanent[:next_key] = {:value => dev.one_time_key, :path => URI.parse(request.referer).path}
 				render :text => "{}", :layout => false	# success!
 			else
 				render :json => dev.errors.messages, :layout => false, :status => :not_acceptable	# 406

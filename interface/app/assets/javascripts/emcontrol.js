@@ -26,9 +26,6 @@
 **/
 
 
-
-
-
 var acaControl = {
 	Off: false,
 	On: true,
@@ -40,14 +37,17 @@ var acaControl = {
 		var config = {
 			url: null,			// URL of the ACA Control Server
 			system: null,		// The system we are connecting to and authentication details for re-connects
-			auto_auth: null		// Are we using the manifest authentication system
+			auto_auth: null,	// Are we using the manifest authentication system
+			idle_update: null,	// Do we want to auto-update the interface when it is idle
+			forced_update: null,// Update the interface as soon as possible
 		},
 			state ={
 				connection: null,	// Base web socket
 			    connected: true,	// Are we currently connected (initialised to true so that any initial failure is triggered)
 			    ready: false,		// Is the server ready for bindings and commands
 			    polling: false,		// Are we polling to remain connected when there is little activity
-			    resume: false		// The reference to the resume timer
+			    resume: false,		// The reference to the resume timer
+			    updater: false		// The reference to the update timer
 			},
 		    bindings = {},
 		    system_calls = {
@@ -154,7 +154,10 @@ var acaControl = {
 		}
 		
 		function do_poll(){
-			send('ping');
+			if((!!config.idle_update) && updateReady)	// Update on idle
+				window.location.reload();
+			else
+				send('ping');
 		}
 		
 		
@@ -162,7 +165,12 @@ var acaControl = {
 		// Sets up a new connection to the remote server
 		//
 		function setup_connection() {
-			state.connection = new WebSocket(config.url); // This will fail completely if an iphone is put to sleep
+			if(!!window.WebSocket)
+				state.connection = new window.WebSocket(config.url);
+			else if(!!window.MozWebSocket)
+				state.connection = new window.MozWebSocket(config.url);
+			else
+				return;
 	
 			// dispatch to the right handlers
 			state.connection.onmessage = function (evt) {
@@ -225,33 +233,49 @@ var acaControl = {
 		//
 		// Bind events for automation (first attempt, else fall back to interface for both auth and system)
 		//
-		var appCache = window.applicationCache,
-			authCount = 0,
-			keyAuthed = false,
+		var	authCount = 0,
+			sysCallCount = 0,
 			oneKey;
+			
+		this.bind('open', function(){
+			
+			authCount = 0;
+			sysCallCount = 0;
+			oneKey = null;
+			
+		});
+			
+		function getCookie(c_name)
+		{
+			var i,x,y,ARRcookies=document.cookie.split(";");
+			for (i=0;i<ARRcookies.length;i++)
+			{
+				x=ARRcookies[i].substr(0,ARRcookies[i].indexOf("="));
+				y=ARRcookies[i].substr(ARRcookies[i].indexOf("=")+1);
+				x=x.replace(/^\s+|\s+$/g,"");
+				if (x==c_name)
+				{
+					return unescape(y);
+				}
+			}
+			return null;
+		}
 			
 		this.bind('authenticate', function(){
 			authCount += 1;
 			
 			if(authCount == 1 && (!!config.auto_auth) && (!!config.system)) {
-				jQuery.ajax('/tokens/key', {
-					type: 'GET',
-					dataType: 'text',
-					success: function(data, textStatus, jqXHR){
-						oneKey = data;
-						send("authenticate", oneKey);
-					},
-					error: function(){
-						keyAuthed = true;	// allow the external system to update the cache
-						send("authenticate", 'failed');		// Triggers the user interface
-					}
-				});
+				oneKey = getCookie('next_key');
+				if(!!oneKey){
+					send("authenticate", oneKey);
+				} else {
+					send("authenticate", 'failed');
+				}
 				
 				return false;
 			}
 		});
 		
-		var sysCallCount = 0;
 		this.bind('system', function(){
 			sysCallCount += 1;
 			
@@ -277,11 +301,27 @@ var acaControl = {
 					},
 					dataType: 'text',
 					success: function(data, textStatus, jqXHR){
-						// trigger manifest update
-						// Then call accept (from manifest event)
-						keyAuthed = true;
-						appCache.update();
-						
+						// Accept the new key on success
+						jQuery.ajax('/tokens/accept', {
+							type: 'POST',
+							data: {
+								key: oneKey,
+								system: config.system
+							},
+							dataType: 'text',
+							success: function(data, textStatus, jqXHR){
+								//
+								// This can safely be ignored. Here for debugging
+								//
+								var yay = "success";
+							},
+							error: function(){
+								//
+								// This can safely be ignored. Here for debugging
+								//
+								var damn = "fail";
+							}
+						});
 					},
 					error: function(){
 						//
@@ -294,48 +334,39 @@ var acaControl = {
 			
 			authCount = 0;
 			sysCallCount = 0;
-			oneKey = null;
 		});
 		
+		//
+		// End Auto_auth ---------------
+		//
+		
+		
+		//
+		// Auto update functions
+		//
+		var appCache = window.applicationCache,
+			updateReady = false;
 		
 		function bindCache(){
-			$(appCache).bind('checking', function(){
-				if(!!keyAuthed){
-					appCache.abort();
-					return false;
-				}
-			});
 			
 			$(appCache).bind('updateready', function(){
 				appCache.swapCache();	// Swap cache has called key
-				appCache = window.applicationCache;
-				bindCache();
 				
-				jQuery.ajax('/tokens/accept', {
-					type: 'POST',
-					data: {
-						key: oneKey,
-						system: config.system
-					},
-					dataType: 'text',
-					success: function(data, textStatus, jqXHR){
-						//
-						// This can safely be ignored. Here for debugging
-						//
-						var yay = "success";
-					},
-					error: function(){
-						//
-						// This can safely be ignored. Here for debugging
-						//
-						var damn = "fail";
-					}
-				});
+				if(!!config.forced_update)
+					window.location.reload();
+				else {
+					appCache = window.applicationCache;
+					bindCache();
+					updateReady = true;
+				}
 			});
+			
 		}
 		
-		if((!!config.auto_auth) && (!!config.system)) {
+		if((!!config.idle_update) || (!!config.forced_update)) {
 			bindCache();
+			
+			state.updater = setInterval('window.applicationCache.update();', 600000);
 		}
 		
 		//
@@ -344,6 +375,7 @@ var acaControl = {
 		//
 		this.destroy = function(){
 			clearInterval(state.resume);
+			clearInterval(state.updater);
 			state.connection.close();
 			var i;
 			for(i = 0; i < acaControl.Controllers.length; i = i + 1) {

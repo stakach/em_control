@@ -9,7 +9,7 @@ development:
   encoding: utf8
   template: template0
   database: control
-  pool: 25
+  pool: 5
   username: rails
   password: devpassword
 
@@ -23,7 +23,11 @@ test:
   timeout: 5000
 
 production:
-  adapter: sqlite3
-  database: db/production.sqlite3
+  adapter: postgresql
+#  adapter: jdbcpostgresql
+  encoding: utf8
+  template: template0
+  database: control
   pool: 5
-  timeout: 5000
+  username: rails
+  password: devpassword

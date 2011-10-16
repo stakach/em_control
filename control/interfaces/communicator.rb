@@ -78,11 +78,11 @@ class Communicator
 		else
 			sys = nil
 			
-			if user[:id].present?
+			if user.class == User
 				sys = user.control_systems.select('control_systems.name').where('control_systems.id = ? AND control_systems.active = ?', system.to_i, true).first
 				
-			elsif user[:login].present? && user[:system] == system.to_i
-				sys = User.find(user[:login]).control_systems.select('control_systems.name').where('control_systems.id = ? AND control_systems.active = ?', system.to_i, true).first
+			elsif user.class == TrustedDevice && user.control_system_id == system.to_i
+				sys = User.find(user.user_id).control_systems.select('control_systems.name').where('control_systems.id = ? AND control_systems.active = ?', system.to_i, true).first
 				if sys.nil?
 					#
 					# Kill comms, this key is not valid

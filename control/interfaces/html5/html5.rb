@@ -71,10 +71,7 @@ class HTML5Monitor
 		else
 			if !data.nil? && data.class == Array
 				if data.length == 1	# one time key
-					begin
-						@user = TrustedDevice.try_to_login(data[0])
-					rescue
-					end
+					@user = TrustedDevice.try_to_login(data[0])
 				elsif data.length == 3
 											#user, password, auth_source
 					source = AuthSource.where("name = ?", data[2]).first
@@ -150,7 +147,7 @@ class HTML5Monitor
 				send_system
 				return
 			else
-				return if !try_auth
+				return unless (try_auth || data[:command] == "ping")
 			end
 			
 			#

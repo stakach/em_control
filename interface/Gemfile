@@ -18,7 +18,7 @@ gem 'em-websocket'
 # ACA Core Plugins
 #
 gem 'login', :path => 'vendor/acacore/login'
-gem 'podsystem', :path => 'vendor/interfaces/podsystem'
+gem 'podsystem', :path => '../../interfaces/podsystem'
 
 
 # Gems used only for assets and not required

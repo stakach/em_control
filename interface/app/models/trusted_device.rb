@@ -16,13 +16,13 @@ class TrustedDevice < ActiveRecord::Base
 	# Generates a one-time key that will allow this device to login without interaction
 	#
 	def generate_key
-		last_authenticated = Time.now
-		next_key = Digest::SHA1.hexdigest "#{Time.now.to_f.to_s}#{id}"
+		self[:last_authenticated] = Time.now
+		self[:next_key] = Digest::SHA1.hexdigest "#{Time.now.to_f.to_s}#{id}"
 		save!
 	end
 	
 	def accept_key
-		one_time_key = next_key
+		self[:one_time_key] = self[:next_key]
 		save!
 	end
 	
@@ -38,14 +38,13 @@ class TrustedDevice < ActiveRecord::Base
 				entry.destroy
 				return nil
 			end
-			if entry.next_key == key	# so the accept failed?
-				one_time_key = next_key # Perform an implicit swap
+			if entry.one_time_key != entry.next_key && entry.next_key == key	# so the accept failed?
+				entry.one_time_key = entry.next_key # Perform an implicit accept
+				entry.save							# Prevents the same key being used again
 			end
-			info = {}
-			info[:login] = entry.user_id
-			info[:system] = entry.control_system_id
+			
 			entry.generate_key if gen		# Key accepted, generate a new one
-			return info
+			return entry
 		end
 	end
 	
@@ -54,9 +53,9 @@ class TrustedDevice < ActiveRecord::Base
 	
 	
 	def generate_keys
-		last_authenticated = Time.now
-		one_time_key = Digest::SHA1.hexdigest "#{Time.now.to_f.to_s}#not so strong"
-		next_key = Digest::SHA1.hexdigest "#{last_authenticated.to_f.to_s}different"
+		self[:last_authenticated] = Time.now
+		self[:one_time_key] = Digest::SHA1.hexdigest "#{Time.now.to_f.to_s}#not so strong"
+		self[:next_key] = Digest::SHA1.hexdigest "#{self[:last_authenticated].to_f.to_s}different"
 	end
 	
 	

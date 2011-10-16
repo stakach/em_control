@@ -11,17 +11,17 @@ GIT
       rails (~> 3.1.1)
 
 PATH
+  remote: ../../interfaces/podsystem
+  specs:
+    podsystem (0.0.1)
+      rails (~> 3.1.1)
+
+PATH
   remote: vendor/acacore/login
   specs:
     login (1.0.0)
       encryptor
       rails (~> 3.1.0)
-
-PATH
-  remote: vendor/interfaces/podsystem
-  specs:
-    podsystem (0.0.1)
-      rails (~> 3.1.1)
 
 GEM
   remote: http://rubygems.org/
