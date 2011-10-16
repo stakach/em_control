@@ -1,6 +1,7 @@
 require 'uri'
 
 class TokensController < ApplicationController
+	layout nil
 	
 	def authenticate	# Allowed through by application controller
 		#
@@ -16,9 +17,9 @@ class TokensController < ApplicationController
 			session[:key] = params[:key]
 			cookies.permanent[:next_key] = {:value => dev.next_key, :path => URI.parse(request.referer).path}
 			
-			render :nothing => true, :layout => false	# success!
+			render :nothing => true	# success!
 		else
-			render :nothing => true, :layout => false, :status => :forbidden	# 403
+			render :nothing => true, :status => :forbidden	# 403
 		end
 	end
 	
@@ -29,9 +30,9 @@ class TokensController < ApplicationController
 				
 		if dev.present?
 			dev.accept_key
-			render :nothing => true, :layout => false	# success!
+			render :nothing => true	# success!
 		else
-			render :nothing => true, :layout => false, :status => :forbidden	# 403
+			render :nothing => true, :status => :forbidden	# 403
 		end
 	end
 	
@@ -53,12 +54,12 @@ class TokensController < ApplicationController
 			
 			if !dev.new_record?
 				cookies.permanent[:next_key] = {:value => dev.one_time_key, :path => URI.parse(request.referer).path}
-				render :text => "{}", :layout => false	# success!
+				render :text => "{}"	# success!
 			else
-				render :json => dev.errors.messages, :layout => false, :status => :not_acceptable	# 406
+				render :json => dev.errors.messages, :status => :not_acceptable	# 406
 			end
 		else
-			render :text => "{you:'are not authorised'}", :layout => false, :status => :forbidden	# 403
+			render :text => "{you:'are not authorised'}", :status => :forbidden	# 403
 		end
 	end
 end
