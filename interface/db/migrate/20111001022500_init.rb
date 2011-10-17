@@ -20,8 +20,8 @@ class Init < ActiveRecord::Migration
 			t.string		:classname,		:allow_null => false
 			t.string		:filename,		:allow_null => false
 			
-			t.string		:module_name	# Type name (Projector)
-			t.string		:actual_name	# Real name (All NEC Projectors)
+			t.string		:module_name,	:allow_null => false	# Type name (Projector)
+			t.string		:actual_name,	:allow_null => false	# Real name (All NEC Projectors)
 			t.text			:description
 			
 			t.datetime		:version_loaded

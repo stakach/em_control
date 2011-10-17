@@ -6,4 +6,10 @@ class ControlSystem < ActiveRecord::Base
 	has_many :zones,				:through => :controller_zones
 	
 	has_many :trusted_devices,		:dependent => :destroy
+	
+	
+	protected
+	
+	
+	validates_presence_of :name, :active
 end

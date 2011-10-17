@@ -8,4 +8,10 @@ class Dependency < ActiveRecord::Base
 		includes(:controller_devices, :controller_logics)
 		.where("(controller_devices.dependency_id = dependencies.id AND controller_devices.control_system_id = ?) OR (controller_logics.dependency_id = dependencies.id AND controller_logics.control_system_id = ?)", controller.id, controller.id)
 	}
+	
+	
+	protected
+	
+	
+	validates_presence_of :classname, :filename, :module_name, :actual_name
 end
