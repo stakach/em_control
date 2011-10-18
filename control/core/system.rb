@@ -144,7 +144,7 @@ module Control
 							@logger = Logger.new(STDOUT)
 						end
 						@logger.formatter = proc { |severity, datetime, progname, msg|
-							"#{severity}: #{@controller.name} - #{msg}\n"
+							"#{datetime.strftime("%d/%m/%Y @ %I:%M%p")} #{severity}: #{@controller.name} - #{msg}\n"
 						}
 					end
 					

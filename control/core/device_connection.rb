@@ -92,7 +92,7 @@ module Control
 						
 						task.call
 					rescue => e
-						logger.error "-- module #{@parent.class} in device_connection.rb, base : error in task loop --"
+						logger.error "module #{@parent.class} in device_connection.rb, base : error in task loop --"
 						logger.error e.message
 						logger.error e.backtrace
 					ensure
@@ -143,7 +143,7 @@ module Control
 								process_send(data, doDelay)
 							}
 						rescue => e
-							logger.error "-- module #{@parent.class} in device_connection.rb, base : error in send loop --"
+							logger.error "module #{@parent.class} in device_connection.rb, base : error in send loop --"
 							logger.error e.message
 							logger.error e.backtrace
 						ensure
@@ -183,7 +183,7 @@ module Control
 							@receive_lock.unlock
 						rescue
 						end
-						logger.error "-- module #{@parent.class} in device_connection.rb, base : error in recieve loop --"
+						logger.error "module #{@parent.class} in device_connection.rb, base : error in recieve loop --"
 						logger.error e.message
 						logger.error e.backtrace
 					ensure
@@ -234,7 +234,7 @@ module Control
 				options[:data] = data
 				options[:retries] = 0 if options[:wait] == false
 			rescue => e
-				logger.error "-- module #{@parent.class} in device_connection.rb, send : possible bad data or options hash --"
+				logger.error "module #{@parent.class} in device_connection.rb, send : possible bad data or options hash --"
 				logger.error e.message
 				logger.error e.backtrace
 					
@@ -268,7 +268,7 @@ module Control
 			if @parent.status_lock.locked?
 				@parent.status_lock.unlock
 			end
-			logger.error "-- module #{@parent.class} in device_connection.rb, send : something went terribly wrong to get here --"
+			logger.error "module #{@parent.class} in device_connection.rb, send : something went terribly wrong to get here --"
 			logger.error e.message
 			logger.error e.backtrace
 			return true
@@ -306,7 +306,7 @@ module Control
 					#
 					# save from bad user code (don't want to deplete thread pool)
 					#
-					logger.error "-- module #{@parent.class} error whilst calling: connect --"
+					logger.error "module #{@parent.class} error whilst calling: connect --"
 					logger.error e.message
 					logger.error e.backtrace
 				end
@@ -333,7 +333,7 @@ module Control
 				rescue => e
 					@buf = nil	# clear the buffer
 					EM.defer do
-						logger.error "-- module #{@parent.class} error whilst setting delimiter --"
+						logger.error "module #{@parent.class} error whilst setting delimiter --"
 						logger.error e.message
 						logger.error e.backtrace
 					end
@@ -373,7 +373,7 @@ module Control
 			# save from bad user code (don't want to deplete thread pool)
 			#	This error should be logged in some consistent manner
 			#
-			logger.error "-- module #{@parent.class} error whilst calling: received --"
+			logger.error "module #{@parent.class} error whilst calling: received --"
 			logger.error e.message
 			logger.error e.backtrace
 				
@@ -405,7 +405,7 @@ module Control
 					# Save the thread in case of bad data in that send
 					#
 					EM.defer do
-						logger.error "-- module #{@parent.class} in device_connection.rb, process_send : possible bad data --"
+						logger.error "module #{@parent.class} in device_connection.rb, process_send : possible bad data --"
 						logger.error e.message
 						logger.error e.backtrace
 					end
@@ -462,7 +462,7 @@ module Control
 				@wait_condition.wait(@receive_lock, timeout)
 				
 				if @data_packet.nil?	# The wait timeout occured - retry command
-					logger.debug "-- module #{@parent.class} in device_connection.rb, wait_response --"
+					logger.debug "module #{@parent.class} in device_connection.rb, wait_response"
 					logger.debug "A response was not recieved for the current command"
 					attempt_retry
 					return

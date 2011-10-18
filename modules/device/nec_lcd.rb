@@ -65,7 +65,7 @@ class NecLcd < Control::Device
 	end
 	
 	def response_delimiter
-		"\r"	# Used to interpret the end of a message (this is why data values are encoded as ASCII)
+		0x0D	# Used to interpret the end of a message (this is why data values are encoded as ASCII)
 	end
 	
 
@@ -433,7 +433,7 @@ class NecLcd < Control::Device
 		#
 		# build header + command and convert to a byte array
 		#
-		command = "".concat(0x02) + command
+		command = "" << 0x02 << command << 0x03
 		command = "0*0#{MSG_TYPE[type]}#{command.length.to_s(16).upcase.rjust(2, '0')}#{command}"
 		command = str_to_array(command)
 		
@@ -445,7 +445,7 @@ class NecLcd < Control::Device
 			check = check ^ byte
 		end
 		
-		command << check		# Add checksum
+		command << check	# Add checksum
 		command << 0x0D		# delimiter required by NEC displays
 		command.insert(0, 0x01)	# insert SOH byte (not part of the checksum)
 

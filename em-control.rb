@@ -72,7 +72,7 @@ module Control
 			System.logger = Logger.new(STDOUT)
 		end
 		System.logger.formatter = proc { |severity, datetime, progname, msg|
-			"#{severity}: #{System} - #{msg}\n"
+			"#{datetime.strftime("%d/%m/%Y @ %I:%M%p")} #{severity}: #{System} - #{msg}\n"
 		}
 	end
 	
