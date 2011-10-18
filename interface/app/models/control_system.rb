@@ -12,4 +12,5 @@ class ControlSystem < ActiveRecord::Base
 	
 	
 	validates_presence_of :name, :active
+	validates_uniqueness_of :name
 end

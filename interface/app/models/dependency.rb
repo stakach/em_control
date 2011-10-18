@@ -14,4 +14,6 @@ class Dependency < ActiveRecord::Base
 	
 	
 	validates_presence_of :classname, :filename, :module_name, :actual_name
+	validates_uniqueness_of :filename
+	validates_uniqueness_of :actual_name
 end

@@ -236,11 +236,23 @@ RailsAdmin.config do |config|
 			:dep_label_method
 		end	
 		
-		field :actual_name
-		field :module_name
-		field :classname
-		field :filename
-		field :description
+		list do
+			field :id
+			field :actual_name
+			field :module_name
+			field :classname
+			field :filename
+			field :description
+		end
+		
+		edit do
+			field :id
+			field :actual_name
+			field :module_name
+			field :classname
+			field :filename
+			field :description
+		end
 	end
 	
 	def dep_label_method
@@ -262,10 +274,20 @@ RailsAdmin.config do |config|
 	config.model ControlSystem do
 		weight 12
 		
-		field :name
-		field :description
+		list do
+			field :id
+			field :name
+			field :description
+			
+			field :zones
+		end
 		
-		field :zones
+		edit do
+			field :name
+			field :description
+			
+			field :zones
+		end
 	end
 	
 	
