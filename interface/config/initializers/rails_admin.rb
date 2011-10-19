@@ -277,6 +277,7 @@ RailsAdmin.config do |config|
 		list do
 			field :id
 			field :name
+			field :active
 			field :description
 			
 			field :zones
@@ -285,6 +286,7 @@ RailsAdmin.config do |config|
 		edit do
 			field :name
 			field :description
+			field :active
 			
 			field :zones
 		end
@@ -346,5 +348,34 @@ RailsAdmin.config do |config|
 		field :integer_value
 		field :float_value
 		field :datetime_value
+	end
+	
+	
+	config.model TrustedDevice do
+		weight 16
+		
+		object_label_method do
+			:trust_label_method
+		end	
+		
+		list do
+			field :reason
+			field :user
+			field :control_system
+			field :last_authenticated
+			field :created_at
+			field :expires
+			field :notes
+		end
+		
+		edit do
+			field :reason
+			field :expires
+			field :notes
+		end
+	end
+	
+	def trust_label_method
+		"Trusting #{self.reason}"
 	end
 end

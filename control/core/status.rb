@@ -33,9 +33,8 @@ module Control
 				logger.debug "#{self.class} status updated: #{status} = #{data}"
 			end
 			
-			EM.defer do
-				notify_observers(self, status, data)	# only notify changes
-			end
+			
+			notify_observers(self, status, data)	# only notify changes
 		end
 		
 		attr_reader :status	# Should not be accessed like this for modification
