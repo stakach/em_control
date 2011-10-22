@@ -1,11 +1,10 @@
 desc 'Start the control system server'
-task :control, [:debug] => [:environment] do |t, args|
-	args.with_defaults(:debug => 'INFO')
-
+task :control => :environment do
 	require './../em-control.rb'
 
-	puts "Default Log Level: #{args[:debug]}"
+	loglevel = CONTROL_CONFIG[:debug_level] || 'INFO'
+	puts "Default Log Level: #{loglevel}"
 
-	Control.set_log_level(args[:debug])
+	Control.set_log_level(loglevel)
 	Control.start
 end

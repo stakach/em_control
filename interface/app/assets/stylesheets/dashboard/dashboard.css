@@ -1,0 +1,27 @@
+/*
+ * This is a manifest file that'll automatically include all the stylesheets available in this directory
+ * and any sub-directories. You're free to add application-wide styles to this file and they'll appear at
+ * the top of the compiled file, but it's generally better to create a new file per style scope.
+ *= require_self
+ *= require dashboard/jquery.terminal
+*/
+
+
+html, body {
+	margin:0px;
+	padding:0px;
+	height:100%;
+	width:100%;
+	
+	overflow:hidden;
+}
+
+iframe {
+	margin:0px;
+	padding:0px;
+	border:none;
+}
+
+#tilda {
+	box-shadow: 0px 5px 5px #888888;
+}

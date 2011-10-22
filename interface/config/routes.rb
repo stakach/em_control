@@ -34,6 +34,8 @@ Interface::Application.routes.draw do
 		post	:authenticate,	:on => :collection
 		post	:accept,		:on => :collection
 	end
+	
+	match 'interfaces/dashboard' => 'interfaces#dashboard'
 
   # Sample resource route with more complex sub-resources
   #   resources :products do

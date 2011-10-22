@@ -1,6 +1,8 @@
 require File.expand_path('../boot', __FILE__)
 
 require 'rails/all'
+require 'yaml'
+
 
 if defined?(Bundler)
   # If you precompile assets before deploying to production, use this line
@@ -47,3 +49,6 @@ module Interface
     config.assets.version = '1.3'
   end
 end
+
+CONTROL_CONFIG = YAML.load_file("#{Rails.root.to_s}/../config.yml")[Rails.env].symbolize_keys
+# Defaults here?

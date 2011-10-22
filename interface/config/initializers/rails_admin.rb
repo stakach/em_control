@@ -310,6 +310,7 @@ RailsAdmin.config do |config|
 		
 		group :device_location do
 			field :control_system
+			field :custom_name
 			field :priority
 		end
 	end
@@ -328,6 +329,7 @@ RailsAdmin.config do |config|
 		
 		field :dependency
 		field :control_system
+		field :custom_name
 		field :priority
 	end
 	
@@ -338,6 +340,10 @@ RailsAdmin.config do |config|
 		
 		field :name
 		field :description
+		field :encrypt_setting do
+			help 'Only valid for text values.'
+		end
+		
 		field :value_type, :enum do
 			enum do
 				[['Text Value', 0], ['Integer Value', 1], ['Float Value', 2], ['DateTime Value', 3]]

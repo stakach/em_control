@@ -58,7 +58,7 @@ end
 # For performing a redirect where login is successful.
 #
 Login.redirection do
-	render :text => "Authenticated", :layout => false
+	redirect_to '/interfaces/dashboard'
 end
 
 

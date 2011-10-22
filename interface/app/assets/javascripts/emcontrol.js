@@ -105,6 +105,10 @@ var acaControl = {
 			return this; // chainable
 		};
 		
+		this.is_connected = function(){
+			return state.connected;
+		};
+		
 		//
 		// Removes all the callbacks for the event and lets the server know that we
 		//	don't want to revieve it anymore.
@@ -279,8 +283,8 @@ var acaControl = {
 		this.bind('system', function(){
 			sysCallCount += 1;
 			
-			if(sysCallCount == 1 && (!!config.system)) {
-				controller.send("system", config.system);
+			if(sysCallCount == 1 && config.system !== false) {	// 0 == false
+				send("system", config.system);
 				
 				return false;
 			}	// Auto login failure here will result in a disconnect

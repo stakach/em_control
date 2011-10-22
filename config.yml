@@ -1,0 +1,14 @@
+#
+# Custom settings for control installations
+#
+development:
+  encrypt_key: Lri2B0yvEVag+raqX9uqMFu9LmGoGwbaO8fzNidf
+  debug_level: DEBUG
+
+test:
+  encrypt_key: 1234
+  debug_level: DEBUG
+
+production:
+  encrypt_key: Lri2B0yvEVag+raqX9uqMFu9LmGoGwbaO8fzNidf
+  debug_level: INFO
