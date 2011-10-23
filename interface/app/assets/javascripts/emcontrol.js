@@ -47,7 +47,8 @@ var acaControl = {
 			    ready: false,		// Is the server ready for bindings and commands
 			    polling: false,		// Are we polling to remain connected when there is little activity
 			    resume: false,		// The reference to the resume timer
-			    updater: false		// The reference to the update timer
+			    updater: false,		// The reference to the update timer
+			    offline: false		// The system has indicated that it is offline
 			},
 		    bindings = {},
 		    system_calls = {
@@ -57,7 +58,8 @@ var acaControl = {
 				ready: true,		// Remote System is ready for bindings
 				authenticate: true,	// Authentication required
 				system: true,		// Please select a system
-				pong: true			// System is idle
+				pong: true,			// System is idle
+				offline: true		// System is offline (slow down re-connect periods)
 			},
 			$this = this;
 		$.extend(config, options);
@@ -290,7 +292,19 @@ var acaControl = {
 			}	// Auto login failure here will result in a disconnect
 		});
 		
+		this.bind('offline', function(){
+			state.offline = true;
+			clearInterval(state.resume);
+			state.resume = window.setInterval(checkResume, 15000);
+		});
+		
 		this.bind('ready', function(){
+			if(state.offline) {
+				state.offline = false;
+				clearInterval(state.resume);
+				state.resume = window.setInterval(checkResume, 1000);
+			}
+			
 			if((!!config.auto_auth) && (!!config.system) && sysCallCount == 1 && authCount == 1) {
 				//
 				// Authenticate with the server

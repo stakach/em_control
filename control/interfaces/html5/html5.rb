@@ -129,7 +129,7 @@ class HTML5Monitor
 	
 	def disconnected
 		@data_lock.synchronize {
-			@system.disconnected(self) unless @system.nil?
+			@system.disconnected(self) if (!!@system)	# System could be nil or false
 		}
 	end
 	
@@ -167,6 +167,9 @@ class HTML5Monitor
 						@system = Control::Communicator.select(@user, self, data[:data][0]) unless data[:data].empty?
 						if @system.nil?
 							send_system
+						elsif @system == false	# System offline
+							@socket.send(JSON.generate({:event => "offline", :data => []}))
+							shutdown
 						else
 							@socket.send(JSON.generate({:event => "ready", :data => []}))
 						end
@@ -174,7 +177,7 @@ class HTML5Monitor
 						@socket.send(JSON.generate({:event => "pong", :data => []}))
 					when :ls
 						@socket.send(JSON.generate({:event => "ls",
-							:data => Communicator.system_list(@user)}))
+							:data => Control::Communicator.system_list(@user)}))
 				end
 			elsif @@special_commands.has_key?(data[:command])	# reg, unreg
 				array = data[:data]

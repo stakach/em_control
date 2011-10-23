@@ -94,9 +94,6 @@ $.extend_if_has = function(desc, source, array) {
 		
 		
 	var cmds = {
-		ls: function() {
-			return cmds.help();
-		}, 
 		help: function() {
 			var _cmds = get_keys(cmds);
 			var _ml = max_length_sa(_cmds);
@@ -125,6 +122,11 @@ $.extend_if_has = function(desc, source, array) {
 			terminal.clear();
 			return '';
 		},
+		ls: function(terminal) {
+			terminal.pause();
+			this.send('ls');
+			return '';
+		}, 
 		"new": function(terminal, system){
 			if(!!system) {
 				this.send('---GOD---.new_system', system);
@@ -209,6 +211,10 @@ jQuery(document).ready(function($) {
   }
   
 
+	var	loggedin = false,
+		callback,
+		term = $('#tilda'),
+		patt = /\w+|"[\w\s]*"/g;
 		
 	$.Storage.remove('token_tilda', null);
 	$.Storage.remove('login_tilda', null);
@@ -217,14 +223,34 @@ jQuery(document).ready(function($) {
 		url:"ws://" + location.hostname + ":81/",
 		system: 0
 	});
-	var authBound = false,
-		loggedin = false,
-		term = $('#tilda'),
-		patt = /\w+|"[\w\s]*"/g;
+	con.bind({
+		authenticate:function() {
+			callback(false);
+		},
+		ready: function() {
+			loggedin = true;
+			callback(true);
+		},
+		close: function() {
+			if(loggedin) {
+				term.terminal.error('Disconnected from control server');
+				term.terminal.logout();
+			}
+		},
+		ls: function(data) {
+			term.terminal.echo(data.names.join(', '));
+			term.terminal.resume();
+		}
+	});
 
 	term.tilda(function(command, terminal) {
 		var clc = jQuery.trim(command);
 		var clcs = clc.match(patt);
+		
+		if (clc.length == 0) {
+			terminal.echo("");
+			return;
+		}
 		
 		//
 		// Remove any inverted commas from the commands
@@ -249,32 +275,14 @@ jQuery(document).ready(function($) {
 			var s = "Choose one of: " + opts.join(", ");
 			terminal.echo(s);
 		}
-		else if (clc.length == 0) {
-			terminal.echo("");
-		}
 		else {
 			terminal.echo("terminal: " + command + ": command not found");
 		}
 	}, {
-		login: function(login, password, callback){
+		login: function(login, password, thecallback){
+			callback = thecallback;
+			
 			if(con.is_connected()){
-				if(!authBound) {
-					con.bind({
-						authenticate:function() {
-							callback(false);
-						},
-						ready: function() {
-							loggedin = true;
-							callback(true);
-						},
-						close: function() {
-							if(loggedin) {
-								term.terminal.error('Disconnected from control server');
-								term.terminal.logout();
-							}
-						}
-					});
-				}
 
 				var username = login.split('\\'),
 					domain = username[0];

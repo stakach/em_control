@@ -55,8 +55,8 @@ class Communicator
 	def self.system_list(user)
 		response = {:ids => [], :names => []}
 		
-		if user[:id].present?
-			user.control_systems.where('active = ?', true).select('control_systems.id, control_systems.name').each do |controller|
+		if user.class == User
+			user.control_systems.select('control_systems.id, control_systems.name').each do |controller|
 				if !!System[controller.name.to_sym]
 					response[:ids] << controller.id
 					response[:names] << controller.name
@@ -82,17 +82,21 @@ class Communicator
 				sys = user.control_systems.select('control_systems.name').where('control_systems.id = ? AND control_systems.active = ?', system.to_i, true).first
 				
 			elsif user.class == TrustedDevice && user.control_system_id == system.to_i
-				sys = User.find(user.user_id).control_systems.select('control_systems.name').where('control_systems.id = ? AND control_systems.active = ?', system.to_i, true).first
+				sys = User.find(user.user_id).control_systems.select('control_systems.name, control_systems.active').where('control_systems.id = ?', system.to_i).first
 				if sys.nil?
 					#
 					# Kill comms, this key is not valid
 					#	Invalidate key
 					#
-					entry = TrustedDevice.where("one_time_key = ? or next_key = ?", key, key).first
-					entry.expires = Time.now
-					entry.save
+					user.expires = Time.now
+					user.save
 					interface.shutdown
 					return nil
+				elsif sys.active == false
+					#
+					# System offline... Disconnect
+					#
+					return false
 				end
 			end
 			
@@ -121,7 +125,7 @@ class Communicator
 			#	This still isn't perfect as we could be observing modules we are not using...
 			#
 		}
-		logger.debug "-- Interface #{interface.class} disconnected"	
+		logger.debug "-- Interface #{interface.class} disconnected" unless logger.nil?
 	end
 
 
