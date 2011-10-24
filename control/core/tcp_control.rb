@@ -44,7 +44,9 @@ module Control
 				@connect_retry = 0
 				
 				if !@tls_enabled
-					call_connected
+					EM.defer do
+						call_connected
+					end
 				else
 					if !@parent.respond_to?(:certificates)
 						start_tls
@@ -64,18 +66,22 @@ module Control
 			end
 			
 			def ssl_handshake_completed
-				call_connected(get_peer_cert)		# this will mark the true connection complete stage for encrypted devices
+				EM.defer do
+					call_connected(get_peer_cert)		# this will mark the true connection complete stage for encrypted devices
+				end
 			end
 			
 
 			def unbind
 				# set offline
-				@is_connected = false
 				@buf = nil	# Any data in from TCP stream is now invalid
 				
 				return if @shutting_down
 				
 				EM.defer do
+					@status_lock.synchronize {
+						@is_connected = false
+					}
 					@task_queue.push lambda {
 						@parent[:connected] = false
 						return unless @parent.respond_to?(:disconnected)

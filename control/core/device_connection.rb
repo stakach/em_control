@@ -19,7 +19,9 @@ module Control
 					@parent[:connected] = false
 					if @parent.respond_to?(:disconnected)
 						begin
-							@parent.disconnected
+							@task_lock.synchronize {
+								@parent.disconnected
+							}
 						rescue => e
 							#
 							# save from bad user code (don't want to deplete thread pool)
@@ -40,12 +42,13 @@ module Control
 			@default_send_options = {
 				:wait => true,			# Wait for response
 				:delay => 0,			# Delay next send by x.y seconds
+				:delay_on_recieve => 0,	# Delay next send after a recieve by x.y seconds (only works when we are waiting for responses)
 				:max_waits => 3,
 				:retries => 2,
 				:hex_string => false,
 				:timeout => 5,			# Timeout in seconds
 				:priority => 0,
-				:max_buffer => 1048576	# 1mb
+				:max_buffer => 1048576	# 1mb, probably overkill for a defualt
 			}
 
 			@receive_queue = Queue.new	# So we can process responses in different ways
@@ -57,7 +60,9 @@ module Control
 			@send_queue = PriorityQueue.new		# regular priority
 			@send_queue.extend(MonitorMixin)
 			@last_send_at = 0.0
+			@last_recieve_at = 0.0
 
+			@task_lock = Mutex.new		# Make sure no task processes are being executed
 			@receive_lock = Mutex.new	# Recieve data communications
 			@send_lock = Mutex.new		# For in sync send and receives when required
 			@confirm_send_lock = Mutex.new		# For use in confirming when a send has taken place
@@ -90,7 +95,9 @@ module Control
 						task = @task_queue.pop
 						break if @shutting_down
 						
-						task.call
+						@task_lock.synchronize {
+							task.call
+						}
 					rescue => e
 						logger.error "module #{@parent.class} in device_connection.rb, base : error in task loop --"
 						logger.error e.message
@@ -201,6 +208,8 @@ module Control
 				@default_send_options.merge!(options)
 			}
 		end
+		
+		
 			
 		
 		def logger
@@ -285,7 +294,14 @@ module Control
 			}
 		end
 		
-		def call_connected(*args)
+		def command_option(key)
+			@status_lock.synchronize {
+				return @last_command[key]
+			}
+		end
+		
+		
+		def call_connected(*args)		# Called from a deferred thread
 			@status_lock.synchronize {
 				@is_connected = true
 			}
@@ -320,11 +336,16 @@ module Control
 		#	NOTE: The buffer cannot be defered otherwise there are concurrency issues 
 		#
 		def do_receive_data(data)
+			recieve_at = Time.now.to_f
+			
 			if @parent.respond_to?(:response_delimiter)
 				begin
 					@buf ||= BufferedTokenizer.new(build_delimiter, @default_send_options[:max_buffer])    # Call back for character
 					result = @buf.extract(data)
 					EM.defer do
+						@status_lock.synchronize {
+							@last_recieve_at = recieve_at
+						}
 						result.each do |line|
 							@receive_queue.push(line)
 						end
@@ -341,6 +362,9 @@ module Control
 			end
 				
 			EM.defer do
+				@status_lock.synchronize {
+					@last_recieve_at = recieve_at
+				}
 				@receive_queue.push(data)
 			end
 		end
@@ -448,6 +472,13 @@ module Control
 					end
 				}
 			}
+			
+			if data[:delay_on_recieve] > 0.0
+				@status_lock.synchronize {
+					retdelay = @last_recieve_at + data[:delay_on_recieve] - Time.now.to_f
+					sleep(retdelay) if retdelay > 0.0
+				}
+			end
 		end
 			
 

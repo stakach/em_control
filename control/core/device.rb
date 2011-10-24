@@ -46,6 +46,10 @@ module Control
 			@base.last_command
 		end
 		
+		def command_option(key)
+			@base.command_option(key)
+		end
+		
 
 		def logger
 			@system_lock.synchronize {

@@ -14,7 +14,6 @@ class TokensController < ActionController::Base
 		#
 		dev = TrustedDevice.try_to_login(params[:key], true)	# true means gen the next key
 		if params[:system].present? && params[:system].to_i == dev.control_system_id
-			reset_session unless session[:user].present?
 			session[:token] = dev.user_id
 			session[:system] = dev.control_system_id
 			session[:key] = params[:key]
@@ -46,9 +45,7 @@ class TokensController < ActionController::Base
 	#	We don't want to reset the session if a valid user is already authenticated either
 	#
 	def new
-		if session[:user].nil?
-			reset_session
-		end
+		reset_session unless session[:user].present?
 		
 		render :text => form_authenticity_token
 	end
@@ -60,8 +57,8 @@ class TokensController < ActionController::Base
 		# Ensure the user can access the control system requested (the control system does this too)
 		# Generate key, populate the session
 		#
-		user = current_user	# We have to be authed to get here
-		sys = user.control_systems.where('control_systems.id = ? AND active = ?', params[:system], true).first
+		user = session[:user].present? ? User.find(session[:user]) : nil	# We have to be authed to get here
+		sys = user.control_systems.where('control_systems.id = ?', params[:system]).first
 		if user.present? && sys.present?
 			
 			dev = TrustedDevice.new(params[:trusted_device])
@@ -71,12 +68,16 @@ class TokensController < ActionController::Base
 			
 			if !dev.new_record?
 				cookies.permanent[:next_key] = {:value => dev.one_time_key, :path => URI.parse(request.referer).path}
-				render :text => "{}"	# success!
+				render :json => {}	# success!
 			else
 				render :json => dev.errors.messages, :status => :not_acceptable	# 406
 			end
 		else
-			render :text => "{you:'are not authorised'}", :status => :forbidden	# 403
+			if user.present?
+				render :json => {:control => 'could not find the system selected'}, :status => :forbidden	# 403
+			else
+				render :json => {:you => 'are not authorised'}, :status => :forbidden	# 403
+			end
 		end
 	end
 	

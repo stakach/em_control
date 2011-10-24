@@ -21,6 +21,12 @@ class PodControl < Control::Logic
 		self[:laptop2] = setting(:laptop2)
 		register(:Display, :input)	# expects display_input_change
 	end
+	
+	
+	def on_update
+		self[:laptop1] = setting(:laptop1)
+		self[:laptop2] = setting(:laptop2)
+	end
 
 
 	def select(input)

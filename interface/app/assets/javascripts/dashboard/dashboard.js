@@ -151,6 +151,14 @@ $.extend_if_has = function(desc, source, array) {
 			
 			return 'The syntax of the command is incorrect.';
 		},
+		'delete': function(terminal, system){
+			if(!!system) {
+				this.send(system + '.delete');
+				return 'Signal sent...';
+			}
+			
+			return 'The syntax of the command is incorrect.';
+		},
 		reload: function(terminal, system){
 			system = parseInt(system);
 			
