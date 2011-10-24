@@ -1,7 +1,10 @@
 require 'uri'
 
-class TokensController < ApplicationController
+class TokensController < ActionController::Base
+	protect_from_forgery
+	before_filter :auth_user, :except => [:authenticate, :manifest, :new]
 	layout nil
+	
 	
 	def authenticate	# Allowed through by application controller
 		#
@@ -37,6 +40,20 @@ class TokensController < ApplicationController
 	end
 	
 	
+	#
+	# Build a new session for the interface if the existing one has expired
+	#	This maintains the csrf security
+	#	We don't want to reset the session if a valid user is already authenticated either
+	#
+	def new
+		if session[:user].nil?
+			reset_session
+		end
+		
+		render :text => form_authenticity_token
+	end
+	
+	
 	def create
 		#
 		# Application controller ensures we are logged in as real user
@@ -61,5 +78,13 @@ class TokensController < ApplicationController
 		else
 			render :text => "{you:'are not authorised'}", :status => :forbidden	# 403
 		end
+	end
+	
+	
+	protected
+	
+	
+	def auth_user
+		redirect_to root_path unless session[:user].present? || session[:token].present?
 	end
 end

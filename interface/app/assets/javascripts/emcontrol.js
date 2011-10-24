@@ -311,16 +311,17 @@ var acaControl = {
 				// Then we can safely reload the cache
 				// on cache success we accept the new key
 				//
-				jQuery.ajax('/tokens/authenticate', {
-					type: 'POST',
-					data: {
-						key: oneKey,
-						system: config.system
-					},
+				jQuery.ajax('/tokens/new', {
+					type: 'GET',
 					dataType: 'text',
 					success: function(data, textStatus, jqXHR){
-						// Accept the new key on success
-						jQuery.ajax('/tokens/accept', {
+						//
+						// Set the csrf token
+						// Get the new one-time-key
+						//
+						$('meta[name="csrf-token"]').attr('content', data);
+						
+						jQuery.ajax('/tokens/authenticate', {
 							type: 'POST',
 							data: {
 								key: oneKey,
@@ -328,10 +329,27 @@ var acaControl = {
 							},
 							dataType: 'text',
 							success: function(data, textStatus, jqXHR){
-								//
-								// This can safely be ignored. Here for debugging
-								//
-								var yay = "success";
+								// Accept the new key on success
+								jQuery.ajax('/tokens/accept', {
+									type: 'POST',
+									data: {
+										key: oneKey,
+										system: config.system
+									},
+									dataType: 'text',
+									success: function(data, textStatus, jqXHR){
+										//
+										// This can safely be ignored. Here for debugging
+										//
+										var yay = "success";
+									},
+									error: function(){
+										//
+										// This can safely be ignored. Here for debugging
+										//
+										var damn = "fail";
+									}
+								});
 							},
 							error: function(){
 								//
