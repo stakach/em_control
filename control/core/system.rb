@@ -28,6 +28,8 @@ module Control
 		#	This is the re-load code function (live bug fixing - removing functions does not work)
 		#
 		def self.reload(dep)
+			System.logger.info "reloading dependency: #{dep}"
+			
 			dep = Dependency.find(dep)
 			Modules.load_module(dep)
 			

@@ -182,6 +182,9 @@ module Control
 							#
 							@receive_lock.unlock
 							@send_lock.synchronize {
+								@status_lock.synchronize {
+									@last_command = {:data => data}
+								}
 								self.process_data(data)
 							}
 						end
