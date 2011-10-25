@@ -91,6 +91,7 @@ class SharpLcd < Control::Device
 				self[:warming] = true
 				self[:power] = On
 				logger.debug "-- Sharp LCD, requested to power on"
+				power_on?
 			end
 		else
 			#self[:power_target] = Off
@@ -242,9 +243,9 @@ class SharpLcd < Control::Device
 				do_poll
 				
 				@poll_lock.synchronize {
-					@polling_timer = periodic_timer(30) do
+					@polling_timer = periodic_timer(40) do
 						logger.debug "-- Polling Display"
-						do_poll unless self[:warming]			# don't poll when warming up
+						do_poll #unless self[:warming]			# don't poll when warming up
 					end
 				}
 				
