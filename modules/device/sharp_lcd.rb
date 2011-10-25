@@ -30,7 +30,7 @@
 #
 #
 class SharpLcd < Control::Device
-	DelayTime = 1.0 / 10.0	# Time of 100ms from recieve before next send
+	DelayTime = 1.0 / 9.0	# Time of 111ms from recieve before next send
 	
 
 	#
@@ -53,6 +53,10 @@ class SharpLcd < Control::Device
 		
 		base.default_send_options = {:delay_on_recieve => DelayTime}
 		@poll_lock = Mutex.new
+	end
+	
+	def on_update
+		base.default_send_options = {:delay_on_recieve => DelayTime}
 	end
 	
 	def connected
@@ -103,7 +107,7 @@ class SharpLcd < Control::Device
 	end
 	
 	def power_on?
-		do_send('POWR????', {:emit => :power, :timeout => 10, :value_ret_only => :POWR})
+		do_send('POWR????', {:emit => :power, :timeout => 20, :value_ret_only => :POWR})
 	end
 	
 	
