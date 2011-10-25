@@ -7,7 +7,7 @@ module Control
 		def [] (status)
 			status = status.to_sym if status.class == String
 			@status_lock.synchronize {
-				@status[status]
+				return @status[status]
 			}
 		end
 		
@@ -17,15 +17,9 @@ module Control
 			@status_lock.synchronize {
 				old_data = @status[status]
 				@status[status] = data
-				if @status_emit.has_key?(status)
-					var = @status_emit.delete(status)
-					
-					begin
-						var[1].cancel()
-					rescue
-					end
-					
-					var[0].broadcast
+				if @status_emit.has_key?(status) && @status_emit[status].length > 0
+					@status_emit[status].shift.broadcast
+					logger.debug "Emit clear success: #{status}"
 				end
 			}
 			if data != old_data

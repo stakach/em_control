@@ -107,7 +107,7 @@ class SharpLcd < Control::Device
 	end
 	
 	def power_on?
-		do_send('POWR????', {:emit => :power, :timeout => 20, :value_ret_only => :POWR})
+		do_send('POWR????', {:emit => :power, :timeout => 10, :value_ret_only => :POWR})
 	end
 	
 	
@@ -235,9 +235,10 @@ class SharpLcd < Control::Device
 		if command.nil?
 			
 			if data == "Login:"
-				do_send(setting(:password))
+				do_send(setting(:password), :delay_on_recieve => 5.0)
 				return true
 			elsif data == "Password:OK"
+				command_successful(true)	# send the result early polling is using an emit
 				do_poll
 				
 				@poll_lock.synchronize {

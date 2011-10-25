@@ -82,6 +82,7 @@ module Control
 					@status_lock.synchronize {
 						@is_connected = false
 					}
+					@parent.clear_emit_waits
 					@task_queue.push lambda {
 						@parent[:connected] = false
 						return unless @parent.respond_to?(:disconnected)
@@ -96,6 +97,7 @@ module Control
 							logger.error e.backtrace
 						end
 					}
+					
 				
 					# attempt re-connect
 					#	if !make and break

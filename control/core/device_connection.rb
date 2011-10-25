@@ -17,6 +17,7 @@ module Control
 				
 				EM.defer do
 					@parent[:connected] = false
+					@parent.clear_emit_waits
 					if @parent.respond_to?(:disconnected)
 						begin
 							@task_lock.synchronize {
@@ -70,6 +71,10 @@ module Control
 			@wait_condition = ConditionVariable.new			# for waking and waiting on the recieve data
 			@connected_condition = ConditionVariable.new	# for maintaining the current queue on disconnect and re-starting
 			@sent_condition = ConditionVariable.new			# This is used to confirm the send
+			
+			
+			@response_lock = Mutex.new
+			@response_condition = ConditionVariable.new
 		
 				
 			@status_lock = Mutex.new	# A lock for last command and is_connected
@@ -112,7 +117,7 @@ module Control
 			# Send event loop
 			#
 			EM.defer do
-				@send_queue.synchronize do	# this thread is the send queue (so we lock it)
+				
 					data = nil
 					waitRequired = false
 					delay = 0.0
@@ -157,7 +162,7 @@ module Control
 							ActiveRecord::Base.clear_active_connections!
 						end
 					end
-				end
+				
 			end
 			
 			#
@@ -185,7 +190,19 @@ module Control
 								@status_lock.synchronize {
 									@last_command = {:data => data}
 								}
-								self.process_data(data)
+								@response_lock.synchronize {
+									EM.defer do
+										begin
+											@send_queue.mon_enter	# this indicates the priority send queue
+											process_data(@data_packet)
+										ensure
+											@send_queue.mon_exit
+										end
+									end
+									@response_condition.wait(@response_lock)
+									
+									response = @process_data_result
+								}
 							}
 						end
 					rescue => e
@@ -205,6 +222,7 @@ module Control
 			
 
 		attr_reader :is_connected
+		attr_reader :send_queue
 		attr_reader :default_send_options
 		def default_send_options= (options)
 			@status_lock.synchronize {
@@ -258,12 +276,6 @@ module Control
 			# Use a monitor here to allow for re-entrant locking
 			#	This allows for a priority queue and we guarentee order of operations
 			#
-			#	See Device::send for why we are locking here
-			#
-			if !options[:emit].nil?
-				@parent.status_lock.lock
-			end
-
 			if @send_queue.mon_try_enter			# is this the same thread?
 				@pri_queue.push(options, options[:priority])		# Prioritise the command
 				@send_queue.mon_exit
@@ -277,9 +289,6 @@ module Control
 			#
 			# Save from a fatal error
 			#
-			if @parent.status_lock.locked?
-				@parent.status_lock.unlock
-			end
 			logger.error "module #{@parent.class} in device_connection.rb, send : something went terribly wrong to get here --"
 			logger.error e.message
 			logger.error e.backtrace
@@ -390,21 +399,45 @@ module Control
 		# Controls the flow of data for retry puropses
 		#
 		def process_data(data)
-			if @parent.respond_to?(:received)
-				return @parent.received(str_to_array(data))	# non-blocking call (will throw an error if there is no data)
-			else	# If no receive function is defined process the next command
-				return true
+			this = 0
+			@response_lock.synchronize {
+				@process_data_result = nil
+				@process_data_id = @process_data_id || 0
+				@process_data_id = 1 if @process_data_id > 999999
+				this = @process_data_id
+			}
+			result = true
+			begin
+				if @parent.respond_to?(:received)
+					result = @parent.received(str_to_array(data))	# non-blocking call (will throw an error if there is no data)
+				else	# If no receive function is defined process the next command
+					result = true
+				end
+			rescue => e
+				#
+				# save from bad user code (don't want to deplete thread pool)
+				#	This error should be logged in some consistent manner
+				#
+				logger.error "module #{@parent.class} error whilst calling: received --"
+				logger.error e.message
+				logger.error e.backtrace
 			end
-		rescue => e
-			#
-			# save from bad user code (don't want to deplete thread pool)
-			#	This error should be logged in some consistent manner
-			#
-			logger.error "module #{@parent.class} error whilst calling: received --"
-			logger.error e.message
-			logger.error e.backtrace
-				
-			return true
+			@response_lock.synchronize {
+				if this == @process_data_id
+					@process_data_id += 1
+					@process_data_result = result
+					@response_condition.broadcast
+				end
+			}
+		end
+		
+		
+		def process_data_result(result)	# called from user code
+			@response_lock.synchronize {
+				@process_data_id += 1
+				@process_data_result = result
+				@response_condition.broadcast
+			}
 		end
 
 		#
@@ -412,7 +445,7 @@ module Control
 		#	send_lock is active
 		#	send_queue monitor is active
 		#
-		def process_send(data, delay)
+		def process_send(data, delay)			
 			@status_lock.lock		# Status locked
 			@last_command = data
 			if @is_connected == false
@@ -488,40 +521,73 @@ module Control
 		def wait_response
 			num_rets = nil
 			timeout = nil
+			emit = nil
 			@status_lock.synchronize {
 				num_rets = @last_command[:max_waits]
 				timeout = @last_command[:timeout]
+				emit = @last_command[:emit]
 			}
-			begin
+			
+			while true
 				@wait_condition.wait(@receive_lock, timeout)
 				
 				if @data_packet.nil?	# The wait timeout occured - retry command
 					logger.debug "module #{@parent.class} in device_connection.rb, wait_response"
 					logger.debug "A response was not recieved for the current command"
-					attempt_retry
+					attempt_retry(emit)
 					return
 				else					# Process the data
-					response = process_data(@data_packet)
+					response = nil
+					
+					
+					@response_lock.synchronize {
+						EM.defer do
+							begin
+								@send_queue.mon_enter	# this indicates the priority send queue
+								process_data(@data_packet)
+							ensure
+								@send_queue.mon_exit
+							end
+						end
+						@response_condition.wait(@response_lock)
+						
+						response = @process_data_result
+					}
+					
 					@data_packet = nil
 					
 					if response == false
-						attempt_retry
+						attempt_retry(emit)
 						return
 					elsif response == true
 						return
+						#
+						# Up to the user to ensure any emit is triggered when returning true!
+						#
 					end
-					
-					@wait_condition.broadcast	# A nil response (we need the next data)
 				end
 				#
 				# If we haven't returned before we reach this point then the last data was
 				#	not relavent or complete (framing) and we are still waiting (max wait == num_retries * timeout)
-				#
+				#				
 				num_rets -= 1
-			end while num_rets > 0
+				if num_rets > 0
+					@wait_condition.broadcast	# A nil response (we need the next data)
+				else
+					break;
+				end
+			end
+			
+			#
+			# Ensure any status waits are started
+			#
+			if num_rets <= 0 && emit.present?
+				@parent.end_emit_wait(emit)
+				logger.debug "Emit cleared due to nil response: #{emit}"
+			end
 		end
 		
-		def attempt_retry
+		def attempt_retry(emit)
 			@status_lock.lock		# for last_command
 			if @pri_queue.empty? && @last_command[:retries] > 0	# no user defined replacements and retries left
 				@last_command[:retries] -= 1
@@ -530,6 +596,14 @@ module Control
 				@dummy_queue.push(nil)	# informs our send loop that we are ready
 			else
 				@status_lock.unlock
+				
+				#
+				# Ensure any status waits are started
+				#
+				if emit.present?
+					@parent.end_emit_wait(emit)
+					logger.debug "Emit cleared due to a failed command: #{emit}"
+				end
 			end
 		end
 	end

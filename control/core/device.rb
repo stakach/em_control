@@ -17,6 +17,7 @@ module Control
 			@status_lock = Mutex.new
 			@system_lock = Mutex.new
 			@status_emit = {}	# status => condition_variable
+			@status_waiting = false
 		end
 
 		#
@@ -50,6 +51,11 @@ module Control
 			@base.command_option(key)
 		end
 		
+		
+		def command_successful(result)
+			@base.process_data_result(result)
+		end
+		
 
 		def logger
 			@system_lock.synchronize {
@@ -62,10 +68,28 @@ module Control
 		#
 		# required by base for send logic
 		#
-		attr_reader :status_lock
 		attr_reader :secure_connection
 		attr_reader :systems
 		attr_reader :base
+		
+		def end_emit_wait(status)
+			@status_lock.synchronize {
+				if @status_emit.has_key?(status) && @status_emit[status].length > 0
+					@status_emit[status].shift.broadcast
+				end
+			}
+		end
+		
+		
+		def clear_emit_waits
+			@status_lock.synchronize {
+				@status_emit.each_value do |status|
+					while status.length > 0
+						status.shift.broadcast
+					end
+				end
+			}
+		end
 		
 
 		protected
@@ -98,44 +122,45 @@ module Control
 		end
 
 		def send(data, options = {})
+			if options[:emit].present?
+				logger.debug "Emit set: #{options[:emit]}"
+				@status_lock.lock
+			end
+			
 			error = @base.send(data, options)
 			
-			if !options[:emit].nil?
-				return @status[options[:emit]] if error == true
-				
-				#
-				# The command is queued - we need to wait for the status to be emited
-				#
-				if @status_emit[options[:emit]].nil?
-					@status_emit[options[:emit]] = [ConditionVariable.new]
-				end
-				
-				timeout = options[:emit_wait] || (@base.default_send_options[:retries] * @base.default_send_options[:timeout])
-				@status_emit[options[:emit]] << one_shot(timeout) do
-					@status_lock.synchronize {
-						if @status_emit.has_key?(options[:emit])
-							var = @status_emit.delete(options[:emit])
-							var[0].broadcast		# wake up the thread
-								
-							#
-							# log the event here
-							#
-							EM.defer do
-								logger.debug "-- module #{self.class} in device.rb, send --"
-								logger.debug "An emit timeout occured"
-							end
-						end
-					}
-				end
-
-				@status_emit[options[:emit]][0].wait(@status_lock)
-				
-				#
-				# Locked in send if emit is set
-				#
-				@status_lock.unlock
+			if options[:emit].present?
+				begin
+					emit = options[:emit]
+					stat = @status[emit]
+					return stat if error == true
 					
-				return @status[options[:emit]]
+					#
+					# The command is queued - we need to wait for the status to be emited
+					#
+					if @status_emit[emit].nil?
+						@status_emit[emit] = [ConditionVariable.new]
+					else
+						@status_emit[emit].push(ConditionVariable.new)
+					end
+					
+					#
+					# Allow commands following the current one to execute as high priority if in recieve
+					#	Ensures all commands that should be high priority are
+					#
+					begin
+						@base.send_queue.mon_exit
+						@status_emit[emit].last.wait(@status_lock)	# wait for the emit to occur
+						@base.send_queue.mon_enter
+					rescue
+						@status_emit[emit].last.wait(@status_lock)	# wait for the emit to occur
+					end
+					
+					stat = @status[emit]
+					return stat
+				ensure
+					@status_lock.unlock
+				end
 			end
 		end
 	end
