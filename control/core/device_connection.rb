@@ -192,9 +192,10 @@ module Control
 								}
 								@response_lock.synchronize {
 									EM.defer do
+										logger.debug "Out of order response recieved from #{@parent.class}"
 										begin
 											@send_queue.mon_enter	# this indicates the priority send queue
-											process_data(@data_packet)
+											process_data(data)
 										ensure
 											@send_queue.mon_exit
 										end
@@ -406,7 +407,7 @@ module Control
 				@process_data_id = 1 if @process_data_id > 999999
 				this = @process_data_id
 			}
-			result = true
+			result = :fail
 			begin
 				if @parent.respond_to?(:received)
 					result = @parent.received(str_to_array(data))	# non-blocking call (will throw an error if there is no data)
@@ -564,6 +565,8 @@ module Control
 						#
 						# Up to the user to ensure any emit is triggered when returning true!
 						#
+					elsif response == :fail
+						num_rets = 1
 					end
 				end
 				#
