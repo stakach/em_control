@@ -305,9 +305,9 @@ class SharpLcd < Control::Device
 	
 
 	def do_poll
-		power_on?	# The only high priority status query
 		power_on_delay
 		video_input
+		power_on?	# The only high priority status query
 		#audio_input
 		mute_status
 		brightness_status

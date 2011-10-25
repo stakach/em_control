@@ -151,8 +151,10 @@ module Control
 							#
 							# Process the sending of the command (and response if we are waiting)
 							#
-							@send_lock.synchronize {
-								process_send(data, doDelay)
+							@receive_lock.synchronize { 	# We are not waiting on anything ensure packets are processed
+								@send_lock.synchronize {
+									process_send(data, doDelay)
+								}
 							}
 						rescue => e
 							logger.error "module #{@parent.class} in device_connection.rb, base : error in send loop --"
@@ -178,14 +180,12 @@ module Control
 						if @send_lock.locked?
 							@data_packet = data
 							@wait_condition.broadcast		# signal the thread to wakeup
-							@wait_condition.wait(@receive_lock)
 							@receive_lock.unlock
 						else
 							#
 							# requires all the send locks ect to prevent recursive locks
 							#	and avoid any errors (these would have been otherwise set during a send)
 							#
-							@receive_lock.unlock
 							@send_lock.synchronize {
 								@status_lock.synchronize {
 									@last_command = {:data => data}
@@ -205,6 +205,7 @@ module Control
 									response = @process_data_result
 								}
 							}
+							@receive_lock.unlock
 						end
 					rescue => e
 						begin
@@ -482,32 +483,26 @@ module Control
 					end
 				end
 			}
-			
-			@receive_lock.synchronize {
-				@confirm_send_lock.synchronize {
-					#
-					# Provides non-blocking delays on data being sent
-					# 	The delay may be longer than specified, never shorter.
-					#
-					if delay == 0.0
-						EM.schedule process	# Send data on the reactor thread
-					else
-						EM.add_timer delay, process
-					end
-					@sent_condition.wait(@confirm_send_lock)	# This ensures we know when any data was sent
-					
-					
-					#
-					# Synchronize the response
-					#
-					if data[:wait]
-						begin
-							wait_response
-						ensure
-							@wait_condition.broadcast	# The datapacket is free for overwriting
-						end
-					end
-				}
+
+			@confirm_send_lock.synchronize {
+				#
+				# Provides non-blocking delays on data being sent
+				# 	The delay may be longer than specified, never shorter.
+				#
+				if delay == 0.0
+					EM.schedule process	# Send data on the reactor thread
+				else
+					EM.add_timer delay, process
+				end
+				@sent_condition.wait(@confirm_send_lock)	# This ensures we know when any data was sent
+				
+				
+				#
+				# Synchronize the response
+				#
+				if data[:wait]
+					wait_response
+				end
 			}
 			
 			if data[:delay_on_recieve] > 0.0
@@ -574,9 +569,7 @@ module Control
 				#	not relavent or complete (framing) and we are still waiting (max wait == num_retries * timeout)
 				#				
 				num_rets -= 1
-				if num_rets > 0
-					@wait_condition.broadcast	# A nil response (we need the next data)
-				else
+				if num_rets <= 0
 					break;
 				end
 			end
