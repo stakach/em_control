@@ -155,7 +155,7 @@ module Control
 								@send_lock.synchronize {
 									process_send(data, doDelay)
 								}
-								@wait_condition.broadcast	# ensure waiting data is processed out of order
+								@wait_condition.broadcast	# ensure waiting data is processed out of order (broadcast is correct)
 							}
 						rescue => e
 							logger.error "module #{@parent.class} in device_connection.rb, base : error in send loop --"
@@ -581,7 +581,7 @@ module Control
 				#
 				num_rets -= 1
 				if num_rets > 0
-					@wait_condition.broadcast	# A nil response (we need the next data)
+					@wait_condition.signal	# A nil response (we need the next data) !! DO NOT BROADCAST HERE
 				else
 					break;
 				end
