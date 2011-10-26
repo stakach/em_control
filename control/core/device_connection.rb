@@ -578,7 +578,7 @@ module Control
 				#
 				# If we haven't returned before we reach this point then the last data was
 				#	not relavent or complete (framing) and we are still waiting (max wait == num_retries * timeout)
-				#				
+				#
 				num_rets -= 1
 				if num_rets > 0
 					@wait_condition.broadcast	# A nil response (we need the next data)

@@ -338,6 +338,7 @@ class SharpLcd < Control::Device
 			if args.length > 0
 				priority = args[0]
 			end
+			#logger.debug "Sharp sending: #{command}"
 			do_send(value, {:priority => priority, :value_ret_only => value[0..3].to_sym})	# Status polling is a low priority
 		end
 	end
