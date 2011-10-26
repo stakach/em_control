@@ -155,7 +155,7 @@ module Control
 								@send_lock.synchronize {
 									process_send(data, doDelay)
 								}
-								@wait_condition.broadcast	# ensure waiting data is processed out of order (broadcast is correct)
+								@wait_condition.broadcast	# ensure waiting data is processed out of order
 							}
 						rescue => e
 							logger.error "module #{@parent.class} in device_connection.rb, base : error in send loop --"
@@ -177,29 +177,24 @@ module Control
 						data = @receive_queue.pop
 						break if @shutting_down
 						
-						@receive_lock.lock
-						if @send_lock.locked?
-							@data_packet = data
-							@wait_condition.broadcast		# signal the thread to wakeup
-							@wait_condition.wait(@receive_lock)
-							if @data_packet.present?
-								process_out_of_order(@data_packet)
-								@data_packet = nil
+						@receive_lock.synchronize {
+							if @send_lock.locked?
+								@data_packet = data
+								@wait_condition.signal
+								@wait_condition.wait(@receive_lock)		# signal the thread to wakeup
+								if @data_packet.present?
+									process_out_of_order(@data_packet)
+									@data_packet = nil
+								end
+							else
+								#
+								# requires all the send locks ect to prevent recursive locks
+								#	and avoid any errors (these would have been otherwise set during a send)
+								#
+								process_out_of_order(data)
 							end
-							@receive_lock.unlock
-						else
-							#
-							# requires all the send locks ect to prevent recursive locks
-							#	and avoid any errors (these would have been otherwise set during a send)
-							#
-							process_out_of_order(data)
-							@receive_lock.unlock
-						end
+						}
 					rescue => e
-						begin
-							@receive_lock.unlock
-						rescue
-						end
 						logger.error "module #{@parent.class} in device_connection.rb, base : error in recieve loop --"
 						logger.error e.message
 						logger.error e.backtrace
@@ -212,24 +207,22 @@ module Control
 		
 		
 		def process_out_of_order(data)
-			@send_lock.synchronize {
-				@status_lock.synchronize {
-					@last_command = {:data => data}
-				}
-				@response_lock.synchronize {
-					EM.defer do
-						logger.debug "Out of order response recieved from #{@parent.class}"
-						begin
-							@send_queue.mon_enter	# this indicates the priority send queue
-							process_data(data)
-						ensure
-							@send_queue.mon_exit
-						end
+			@status_lock.synchronize {
+				@last_command = {:data => data}
+			}
+			@response_lock.synchronize {
+				EM.defer do
+					logger.debug "Out of order response recieved from #{@parent.class}"
+					begin
+						@send_queue.mon_enter	# this indicates the priority send queue
+						process_data(data)
+					ensure
+						@send_queue.mon_exit
 					end
-					@response_condition.wait(@response_lock)
-					
-					response = @process_data_result
-				}
+				end
+				@response_condition.wait(@response_lock)
+				
+				response = @process_data_result
 			}
 		end
 			
@@ -581,7 +574,7 @@ module Control
 				#
 				num_rets -= 1
 				if num_rets > 0
-					@wait_condition.signal	# A nil response (we need the next data) !! DO NOT BROADCAST HERE
+					@wait_condition.broadcast	# A nil response (we need the next data) !! DO NOT BROADCAST HERE
 				else
 					break;
 				end
