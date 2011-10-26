@@ -155,6 +155,7 @@ module Control
 								@send_lock.synchronize {
 									process_send(data, doDelay)
 								}
+								@wait_condition.broadcast	# ensure waiting data is processed out of order
 							}
 						rescue => e
 							logger.error "module #{@parent.class} in device_connection.rb, base : error in send loop --"
@@ -180,31 +181,18 @@ module Control
 						if @send_lock.locked?
 							@data_packet = data
 							@wait_condition.broadcast		# signal the thread to wakeup
+							@wait_condition.wait(@receive_lock)
+							if @data_packet.present?
+								process_out_of_order(@data_packet)
+								@data_packet = nil
+							end
 							@receive_lock.unlock
 						else
 							#
 							# requires all the send locks ect to prevent recursive locks
 							#	and avoid any errors (these would have been otherwise set during a send)
 							#
-							@send_lock.synchronize {
-								@status_lock.synchronize {
-									@last_command = {:data => data}
-								}
-								@response_lock.synchronize {
-									EM.defer do
-										logger.debug "Out of order response recieved from #{@parent.class}"
-										begin
-											@send_queue.mon_enter	# this indicates the priority send queue
-											process_data(data)
-										ensure
-											@send_queue.mon_exit
-										end
-									end
-									@response_condition.wait(@response_lock)
-									
-									response = @process_data_result
-								}
-							}
+							process_out_of_order(data)
 							@receive_lock.unlock
 						end
 					rescue => e
@@ -220,6 +208,29 @@ module Control
 					end
 				end
 			end
+		end
+		
+		
+		def process_out_of_order(data)
+			@send_lock.synchronize {
+				@status_lock.synchronize {
+					@last_command = {:data => data}
+				}
+				@response_lock.synchronize {
+					EM.defer do
+						logger.debug "Out of order response recieved from #{@parent.class}"
+						begin
+							@send_queue.mon_enter	# this indicates the priority send queue
+							process_data(data)
+						ensure
+							@send_queue.mon_exit
+						end
+					end
+					@response_condition.wait(@response_lock)
+					
+					response = @process_data_result
+				}
+			}
 		end
 			
 
@@ -569,7 +580,9 @@ module Control
 				#	not relavent or complete (framing) and we are still waiting (max wait == num_retries * timeout)
 				#				
 				num_rets -= 1
-				if num_rets <= 0
+				if num_rets > 0
+					@wait_condition.broadcast	# A nil response (we need the next data)
+				else
 					break;
 				end
 			end
