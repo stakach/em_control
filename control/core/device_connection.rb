@@ -151,12 +151,10 @@ module Control
 							#
 							# Process the sending of the command (and response if we are waiting)
 							#
-							@receive_lock.synchronize { 	# We are not waiting on anything ensure packets are processed
-								@send_lock.synchronize {
-									process_send(data, doDelay)
-								}
-								@wait_condition.broadcast	# ensure waiting data is processed out of order
+							@send_lock.synchronize {
+								process_send(data, doDelay)
 							}
+							
 						rescue => e
 							logger.error "module #{@parent.class} in device_connection.rb, base : error in send loop --"
 							logger.error e.message
@@ -499,14 +497,16 @@ module Control
 					EM.add_timer delay, process
 				end
 				@sent_condition.wait(@confirm_send_lock)	# This ensures we know when any data was sent
-				
-				
-				#
-				# Synchronize the response
-				#
-				if data[:wait]
-					wait_response
-				end
+				@receive_lock.synchronize {# We are not waiting on anything ensure packets are processed
+					
+					#
+					# Synchronize the response
+					#
+					if data[:wait]
+						wait_response
+					end
+				}
+				@wait_condition.signal	# ensure waiting data is processed out of order
 			}
 			
 			if data[:delay_on_recieve] > 0.0
@@ -574,7 +574,7 @@ module Control
 				#
 				num_rets -= 1
 				if num_rets > 0
-					@wait_condition.broadcast	# A nil response (we need the next data) !! DO NOT BROADCAST HERE
+					@wait_condition.signal	# A nil response (we need the next data) !! DO NOT BROADCAST HERE
 				else
 					break;
 				end
