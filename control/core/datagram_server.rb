@@ -109,7 +109,9 @@ module Control
 					ip = @ips.delete("#{scheme.ip}:#{scheme.port}")
 					@devices.delete("#{ip}:#{scheme.port}")
 				rescue
-					System.logger.info e.message + " removing UDP #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.control_system.name}"
+					EM.defer do
+						System.logger.info e.message + " removing UDP #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.control_system.name}"
+					end
 				end
 			end
 		end

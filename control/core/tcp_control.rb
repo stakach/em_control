@@ -40,10 +40,20 @@ module Control
 			def connection_completed
 				# set status
 				resume if paused?
-				@last_command[:wait] = false if !@last_command[:wait].nil?	# re-start event process
-				@connect_retry = 0
 				
-				if !@tls_enabled
+				@connect_retry = @connect_retry || Atomic.new(0)
+				EM.defer do
+					@connect_retry.value = 0
+				end
+				
+				if !@tls_enabled.value
+					@connected = true
+					if @com_paused
+						@com_paused = false
+						EM.next_tick do
+							@wait_queue.push(nil)
+						end
+					end
 					EM.defer do
 						call_connected
 					end
@@ -66,6 +76,13 @@ module Control
 			end
 			
 			def ssl_handshake_completed
+				@connected = true
+				if @com_paused
+					@com_paused = false
+					EM.next_tick do
+						@wait_queue.push(nil)
+					end
+				end
 				EM.defer do
 					call_connected(get_peer_cert)		# this will mark the true connection complete stage for encrypted devices
 				end
@@ -75,13 +92,13 @@ module Control
 			def unbind
 				# set offline
 				@buf = nil	# Any data in from TCP stream is now invalid
+				@connected = false
+				@connect_retry = @connect_retry || Atomic.new(0)
 				
-				return if @shutting_down
 				
 				EM.defer do
-					@status_lock.synchronize {
-						@is_connected = false
-					}
+					return if @shutting_down.value
+					
 					@parent.clear_emit_waits
 					@task_queue.push lambda {
 						@parent[:connected] = false
@@ -114,7 +131,7 @@ module Control
 						return	# Do not attempt to reconnect this device!
 					end
 					
-					if @connect_retry == 0
+					if @connect_retry.value == 0
 						begin
 							#
 							# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
@@ -124,9 +141,9 @@ module Control
 							EM.next_tick do
 								reconnect ip, settings.port
 							end
-							@connect_retry = 1
+							@connect_retry.update { |v| v += 1}
 						rescue
-							@connect_retry = 2
+							@connect_retry.value = 2
 							EM.defer do
 								logger.info "-- module #{@parent.class} in tcp_control.rb, unbind --"
 								logger.info "Reconnect failed for #{settings.ip}:#{settings.port}"
@@ -134,11 +151,11 @@ module Control
 							do_reconnect(settings)
 						end
 					else
-						@connect_retry += 1
+						@connect_retry.update { |v| v += 1}
 						#
 						# log this once if had to retry more than once
 						#
-						if @connect_retry == 2
+						if @connect_retry.value == 2
 							EM.defer do
 								logger.info "-- module #{@parent.class} in tcp_control.rb, unbind --"
 								logger.info "Reconnect failed for #{settings.ip}:#{settings.port}"
@@ -152,21 +169,21 @@ module Control
 			
 			def do_reconnect(settings)
 				EM.add_timer 5, proc {
-					if !@shutting_down
-						EM.defer do
-							begin
-								#
-								# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
-								# => Use the non-blocking resolver in the future
-								#
-								ip = Addrinfo.tcp(settings.ip, 80).ip_address
-								EM.next_tick do
-									reconnect ip, settings.port
-								end
-								reconnect Addrinfo.tcp(settings.ip, 80).ip_address, settings.port
-							rescue
-								do_reconnect(settings)
+					EM.defer do
+						return if @shutting_down.value
+						
+						begin
+							#
+							# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
+							# => Use the non-blocking resolver in the future
+							#
+							ip = Addrinfo.tcp(settings.ip, 80).ip_address
+							EM.next_tick do
+								reconnect ip, settings.port
 							end
+							#reconnect Addrinfo.tcp(settings.ip, 80).ip_address, settings.port
+						rescue
+							do_reconnect(settings)
 						end
 					end
 				}

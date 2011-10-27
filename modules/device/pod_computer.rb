@@ -63,11 +63,11 @@ class PodComputer < Control::Device
 		0x03	# Used to interpret the end of a message
 	end
 	
-	def received(data)
+	def received(data, command)
 		#
 		# Remove the start character and grab the message
 		#
-		data = array_to_str(data).split("" << 0x02)		
+		data = data.split("" << 0x02)
 		if data.length >= 2
 			data = data[-1]	# valid response
 		else

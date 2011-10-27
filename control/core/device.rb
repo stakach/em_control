@@ -41,20 +41,11 @@ module Control
 				return @systems.length
 			}
 		end
-
-	
-		def last_command	# get the last command sent that was (this is very contextual)
-			@base.last_command
-		end
-		
-		def command_option(key)
-			@base.command_option(key)
-		end
 		
 		
-		def command_successful(result)
-			@base.process_data_result(result)
-		end
+		#def command_successful(result)			# TODO:: needs a re-think
+		#	@base.process_data_result(result)
+		#end
 		
 
 		def logger
@@ -69,13 +60,26 @@ module Control
 		# required by base for send logic
 		#
 		attr_reader :secure_connection
+		attr_reader :status_lock	# not used at the moment
 		attr_reader :systems
 		attr_reader :base
 		
-		def end_emit_wait(status)
+		def mark_emit_start(status)
 			@status_lock.synchronize {
 				if @status_emit.has_key?(status) && @status_emit[status].length > 0
-					@status_emit[status].shift.broadcast
+					@emit_has_occured = false
+				end
+			}
+		end
+		
+		def mark_emit_end(status)
+			@status_lock.synchronize {
+				if @status_emit.has_key?(status) && @status_emit[status].length > 0
+					if not @emit_has_occured
+						@emit_has_occured = true
+						@status_emit[status].shift.broadcast
+						logger.debug "A forced emit on #{status} occured"
+					end
 				end
 			}
 		end
@@ -127,7 +131,7 @@ module Control
 				@status_lock.lock
 			end
 			
-			error = @base.send(data, options)
+			error = @base.do_send_command(data, options)
 			
 			if options[:emit].present?
 				begin
@@ -149,9 +153,9 @@ module Control
 					#	Ensures all commands that should be high priority are
 					#
 					begin
-						@base.send_queue.mon_exit
+						@base.recieved_lock.mon_exit
 						@status_emit[emit].last.wait(@status_lock)	# wait for the emit to occur
-						@base.send_queue.mon_enter
+						@base.recieved_lock.mon_enter
 					rescue
 						@status_emit[emit].last.wait(@status_lock)	# wait for the emit to occur
 					end

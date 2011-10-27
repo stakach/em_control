@@ -19,13 +19,14 @@ module Control
 				@status[status] = data
 				if @status_emit.has_key?(status) && @status_emit[status].length > 0
 					begin
-						@base.send_queue.mon_exit				# check we are in the send queue
-						@base.send_queue.mon_enter
+						@base.recieved_lock.mon_exit				# check we are in the send queue
+						@base.recieved_lock.mon_enter
 						@status_emit[status].shift.broadcast	# wake up the thread
+						@emit_has_occured = true
 					rescue
 						# Emit can only occur in the recieve queue
 					end
-					logger.debug "Emit clear success: #{status}"
+					#logger.debug "Emit clear success: #{status}"
 				end
 			}
 			if data != old_data

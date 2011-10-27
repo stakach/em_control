@@ -56,10 +56,11 @@ class SharpLcd < Control::Device
 	end
 	
 	def on_update
-		base.default_send_options = {:delay_on_recieve => DelayTime}
+		logger.debug "-- Sharp LCD: !!UPDATED!!"
 	end
 	
 	def connected
+		logger.debug "-- Sharp LCD: !!CONNECTED!!"
 		do_send(setting(:username))
 	end
 
@@ -224,61 +225,61 @@ class SharpLcd < Control::Device
 	#
 	# LCD Response code
 	#
-	def received(data)		
-		data = array_to_str(data)	# Convert bytes to a string
-		
+	def received(data, command)		# Data is default recieved as a string
 		
 		#logger.debug "-- Sharp LCD, recieved: #{data}"
 		
 		value = nil
-		command = command_option(:value_ret_only)
 		
+		
+		if data == "Login:"
+			do_send(setting(:password), :delay_on_recieve => 5.0)
+			return true
+		elsif data == "Password:OK"
+			do_poll
+			
+			@poll_lock.synchronize {
+				@polling_timer = periodic_timer(5) do
+					logger.debug "-- Polling Display"
+					do_poll
+				end
+			}
+			
+			return true
+		elsif data == "OK"
+			return true
+		elsif data == "WAIT"
+			logger.debug "-- Sharp LCD, wait"
+			return nil
+		elsif data == "ERR"
+			logger.debug "-- Sharp LCD, error"
+			return false
+		end
+			
 		if command.nil?
-			
-			if data == "Login:"
-				do_send(setting(:password), :delay_on_recieve => 5.0)
-				return true
-			elsif data == "Password:OK"
-				command_successful(true)	# send the result early polling is using an emit
-				do_poll
-				
-				@poll_lock.synchronize {
-					@polling_timer = periodic_timer(40) do
-						logger.debug "-- Polling Display"
-						do_poll #unless self[:warming]			# don't poll when warming up
-					end
-				}
-				
-				return true
-			elsif data == "OK"
-				return true
-			elsif data == "WAIT"
-				return nil
-			elsif data == "ERR"
-				return false
-			end
-			
 			if data.length < 8		# Out of order send?
-				return true
+				logger.info "Sharp sent out of order response: #{data}"
+				return :fail		# this will be ignored
 			end
 			command = data[0..3].to_sym
 			value = data[4..7].to_i
 		else
 			value = data.to_i
+			command = command[:value_ret_only]
 		end
 		
 		case command
 			when :POWR # Power status
 				self[:warming] = false
 				self[:power] = value > 0
-				#logger.debug "-- Sharp LCD, power value #{value > 0}"
+				logger.debug "-- Sharp LCD, power value #{value > 0}"
 			when :INPS # Input status
 				self[:input] = INPUTS[value]
-				#logger.debug "-- Sharp LCD, input #{INPUTS[value]}"
+				logger.debug "-- Sharp LCD, input #{INPUTS[value]}"
 			when :VOLM # Volume status
 				if not self[:audio_mute]
 					self[:volume] = value
-					#logger.debug "-- Sharp LCD, volume #{value}"
+					logger.debug "-- Sharp LCD, volume #{value}"
 				end
 			when :MUTE # Mute status
 				self[:audio_mute] = value == 1
@@ -287,27 +288,28 @@ class SharpLcd < Control::Device
 				else
 					volume_status(0)	# high priority
 				end
-				#logger.debug "-- Sharp LCD, muted #{value == 1}"
+				logger.debug "-- Sharp LCD, muted #{value == 1}"
 			when :CONT # Contrast status
 				value = value / 2 if self[:input] == :vga
 				self[:contrast] = value
-				#logger.debug "-- Sharp LCD, contrast #{value}"
+				logger.debug "-- Sharp LCD, contrast #{value}"
 			when :VLMP # brightness status
 				self[:brightness] = value
-				#logger.debug "-- Sharp LCD, brightness #{value}"
+				logger.debug "-- Sharp LCD, brightness #{value}"
 			when :PWOD
 				self[:power_on_delay] = value
-				#logger.debug "-- Sharp LCD, power on delay #{value}s"
+				logger.debug "-- Sharp LCD, power on delay #{value}s"
 		end
 		
-		return true # Command success
+		return true # Command success?
 	end
 	
 
 	def do_poll
+		do_send('POWR????', {:timeout => 10, :value_ret_only => :POWR, :priority => 99})
 		power_on_delay
 		video_input
-		power_on?	# The only high priority status query
+		#power_on?	# no emits on recieve!!
 		#audio_input
 		mute_status
 		brightness_status
