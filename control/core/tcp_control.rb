@@ -48,12 +48,6 @@ module Control
 				
 				if !@tls_enabled.value
 					@connected = true
-					if @com_paused
-						@com_paused = false
-						EM.next_tick do
-							@wait_queue.push(nil)
-						end
-					end
 					EM.defer do
 						call_connected
 					end
@@ -77,12 +71,6 @@ module Control
 			
 			def ssl_handshake_completed
 				@connected = true
-				if @com_paused
-					@com_paused = false
-					EM.next_tick do
-						@wait_queue.push(nil)
-					end
-				end
 				EM.defer do
 					call_connected(get_peer_cert)		# this will mark the true connection complete stage for encrypted devices
 				end
@@ -95,6 +83,11 @@ module Control
 				@connected = false
 				@connect_retry = @connect_retry || Atomic.new(0)
 				
+				if @clear_queue_on_disconnect
+					@dummy_queue = EM::Queue.new	# === dummy queue (informs when there is data to read from either the high or regular queues)
+					@pri_queue = PriorityQueue.new	# high priority
+					@send_queue = PriorityQueue.new	# regular priority
+				end
 				
 				EM.defer do
 					return if @shutting_down.value

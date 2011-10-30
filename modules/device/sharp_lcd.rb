@@ -60,7 +60,6 @@ class SharpLcd < Control::Device
 	end
 	
 	def connected
-		logger.debug "-- Sharp LCD: !!CONNECTED!!"
 		do_send(setting(:username))
 	end
 
@@ -239,9 +238,9 @@ class SharpLcd < Control::Device
 			do_poll
 			
 			@poll_lock.synchronize {
-				@polling_timer = periodic_timer(5) do
+				@polling_timer = periodic_timer(30) do
 					logger.debug "-- Polling Display"
-					do_poll
+					do_poll unless self[:warming]
 				end
 			}
 			

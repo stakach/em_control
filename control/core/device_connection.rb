@@ -41,7 +41,7 @@ module Control
 				:hex_string => false,
 				:timeout => 5,			# Timeout in seconds
 				:priority => 0,
-				:max_buffer => 1048576	# 1mb, probably overkill for a defualt
+				:retry_on_disconnect => true,
 			}
 			
 			
@@ -79,7 +79,9 @@ module Control
 			@last_sent_at = 0.0
 			@last_recieve_at = 0.0
 			@timeout = nil
-			@max_buffer = @default_send_options[:max_buffer]	# 1mb, probably overkill for a defualt
+			
+			@max_buffer = 1048576	# 1mb, probably overkill for a defualt
+			@clear_queue_on_disconnect = false
 			
 			
 			#
@@ -187,6 +189,9 @@ module Control
 							@wait_queue.push(nil)
 						end				# Ignore sends on disconnected state
 					else
+						if command[:retry_on_disconnect]
+							@pri_queue.push(command, -1)
+						end
 						@com_paused = true
 					end
 				end
@@ -277,6 +282,8 @@ module Control
 					begin
 						if command.present?
 							@parent.mark_emit_start(command[:emit]) if command[:emit].present?
+						else
+							logger.debug "Out of order response recieved: #{response}"
 						end
 						if @parent.respond_to?(:received)
 							result = @parent.received(response, command)
@@ -460,6 +467,9 @@ module Control
 			EM.schedule do
 				begin
 					if @connected
+						if @com_paused				# We are calling from connected function
+							command[:priority] = -2	# To ensure this is the first to run.
+						end
 						queue.push(command, command[:priority])
 						@dummy_queue.push(nil)	# informs our send loop that we are ready
 					end
@@ -486,9 +496,11 @@ module Control
 			#
 			@task_queue.push lambda {
 				@parent[:connected] = true
-				return unless @parent.respond_to?(:connected)
+				
 				begin
-					@parent.connected(*args)
+					@send_queue.mon_synchronize { # Any sends in here are high priority (no emits as this function must return)
+						@parent.connected(*args) if @parent.respond_to?(:connected)
+					}
 				rescue => e
 					#
 					# save from bad user code (don't want to deplete thread pool)
@@ -496,6 +508,13 @@ module Control
 					logger.error "module #{@parent.class} error whilst calling: connect --"
 					logger.error e.message
 					logger.error e.backtrace
+				ensure
+					EM.schedule do
+						if @com_paused
+							@com_paused = false
+							@wait_queue.push(nil)
+						end
+					end
 				end
 			}
 		end
@@ -509,7 +528,8 @@ module Control
 			
 			if options[:max_buffer].present?
 				EM.schedule do
-					@max_buffer = options[:max_buffer]
+					@max_buffer = options[:max_buffer] unless options[:max_buffer].nil?
+					@clear_queue_on_disconnect = options[:clear_queue_on_disconnect] unless options[:clear_queue_on_disconnect].nil?
 				end
 			end
 		end
