@@ -251,6 +251,7 @@ module Control
 					@receive_queue.push(*data)
 				else
 					@processing = true
+					@timeout.cancel
 					process_response(data.shift, @command)
 					if data.length > 0
 						@receive_queue.push(*data)
@@ -317,7 +318,7 @@ module Control
 		
 		def sending_timeout
 			@timeout = true
-			if !@processing
+			if !@processing	# Probably not needed...
 				@processing = true	# Ensure responses go into the queue
 				
 				process_result(:failed)
@@ -332,26 +333,20 @@ module Control
 		
 		def process_result(result)
 			if @waiting
-				if (result.nil? || result == :ignore) && @timeout != true && @command[:max_waits] > 0
+				if (result.nil? || result == :ignore) && @command[:max_waits] > 0
 					@command[:max_waits] -= 1
-					
-					@timeout.cancel
-					@timeout = EM::Timer.new(@command[:timeout]) {
-						sending_timeout
-					}
 					
 					if @receive_queue.size() > 0
 						@receive_queue.pop { |response|
 							process_response(response, @command)
 						}
 					else
+						@timeout = EM::Timer.new(@command[:timeout]) {
+							sending_timeout
+						}
 						@processing = false
 					end
-				else
-					if @timeout != true
-						@timeout.cancel
-					end
-					
+				else					
 					if (result == false || result == :failed) && @command[:retries] > 0 && @pri_queue.length == 0	# assume command failed, we need to retry
 						@command[:retries] -= 1
 						@pri_queue.push(@command)

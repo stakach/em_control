@@ -169,10 +169,10 @@ class NecLcd < Control::Device
 	# Auto adjust
 	#
 	def auto_adjust
-		message = "001E"	# Page + OP code
+		message = OPERATION_CODE[:auto_setup] #"001E"	# Page + OP code
 		message += "0001"	# Value of input as a hex string
 		
-		send_checksum(:set_parameter, message)
+		send_checksum(:set_parameter, message, :delay_on_recieve => 4.0)
 	end
 	
 
@@ -239,17 +239,17 @@ class NecLcd < Control::Device
 	#
 	# LCD Response code
 	#
-	def received(data)
+	def received(data, command)
 		#
 		# Check for valid response
 		#
 		if !check_checksum(data)
-			logger.debug "-- NEC LCD, checksum failed for command: #{array_to_str(last_command)}"
-			logger.debug "-- NEC LCD, response was: #{array_to_str(data)}"
+			logger.debug "-- NEC LCD, checksum failed for command: #{command[:data]}"
+			logger.debug "-- NEC LCD, response was: #{data}"
 			return false
 		end
 		
-		data = array_to_str(data)	# Convert bytes to a string
+		#data = array_to_str(data)	# Convert bytes to a string (recieved like this)
 		
 		case MSG_TYPE[data[4]]	# Check the MSG_TYPE (B, D or F)
 			when :command_reply
@@ -260,7 +260,7 @@ class NecLcd < Control::Device
 					if data[8..9] == "00"
 						power_on_delay(0)	# wait until the screen has turned on before sending commands (0 == high priority)
 					else
-						logger.info "-- NEC LCD, command failed: #{array_to_str(last_command)}"
+						logger.info "-- NEC LCD, command failed: #{command[:data]}"
 						logger.info "-- NEC LCD, response was: #{data}"
 						return false	# command failed
 					end
@@ -273,7 +273,7 @@ class NecLcd < Control::Device
 						#	power(self[:power_target])
 						#end
 					else
-						logger.info "-- NEC LCD, command failed: #{array_to_str(last_command)}"
+						logger.info "-- NEC LCD, command failed: #{command[:data]}"
 						logger.info "-- NEC LCD, response was: #{data}"
 						return false	# command failed
 					end
@@ -282,12 +282,12 @@ class NecLcd < Control::Device
 				
 			when :get_parameter_reply, :set_parameter_reply
 				if data[8..9] == "00"
-					parse_response(data)
+					parse_response(data, command)
 				elsif data[8..9] == 'BE'	# Wait response
-					send(last_command)	# checksum already added
+					send(command[:data])	# checksum already added
 					logger.debug "-- NEC LCD, response was a wait command"
 				else
-					logger.info "-- NEC LCD, get or set failed: #{array_to_str(last_command)}"
+					logger.info "-- NEC LCD, get or set failed: #{command[:data]}"
 					logger.info "-- NEC LCD, response was: #{data}"
 					return false
 				end
@@ -298,7 +298,7 @@ class NecLcd < Control::Device
 	
 
 	def do_poll
-		power_on?	# The only high priority status query
+		#power_on?	# The only high priority status query
 		power_on_delay
 		video_input
 		audio_input
@@ -312,7 +312,7 @@ class NecLcd < Control::Device
 	private
 	
 
-	def parse_response(data)
+	def parse_response(data, command)
 	
 		# 14..15 == type (we don't care)
 		max = data[16..19].to_i(16)
@@ -363,11 +363,10 @@ class NecLcd < Control::Device
 				end
 			when :auto_setup
 				# auto_setup
-				# nothing needed to do here
-				sleep(3)		
+				# nothing needed to do here (we are delaying the next command by 4 seconds)
 			else
 				logger.info "-- NEC LCD, unknown response: #{data[10..13]}"
-				logger.info "-- NEC LCD, for command: #{array_to_str(last_command)}"
+				logger.info "-- NEC LCD, for command: #{command[:data]}"
 				logger.info "-- NEC LCD, full response was: #{data}"
 		end
 	end
@@ -414,6 +413,8 @@ class NecLcd < Control::Device
 
 
 	def check_checksum(data)
+		data = str_to_array(data)
+		
 		check = 0
 		#
 		# Loop through the second to the second last element
