@@ -79,7 +79,7 @@ module Control
 
 			def unbind
 				# set offline
-				@buf = nil	# Any data in from TCP stream is now invalid
+				@buf.flush unless @buf.nil?	# Any incomplete from TCP stream is now invalid
 				@connected = false
 				@connect_retry = @connect_retry || Atomic.new(0)
 				

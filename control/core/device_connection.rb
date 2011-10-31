@@ -226,13 +226,15 @@ module Control
 			
 			if @parent.respond_to?(:response_delimiter)
 				begin
-					del = @parent.response_delimiter
-					if del.class == Array
-						del = array_to_str(del)
-					elsif del.class == Fixnum
-						del = "" << del #array_to_str([del & 0xFF])
+					if @buf.nil?
+						del = @parent.response_delimiter
+						if del.class == Array
+							del = array_to_str(del)
+						elsif del.class == Fixnum
+							del = "" << del #array_to_str([del & 0xFF])
+						end
+						@buf = BufferedTokenizer.new(del, @max_buffer)    # Call back for character
 					end
-					@buf ||= BufferedTokenizer.new(del, @max_buffer)    # Call back for character
 					data = @buf.extract(data)
 				rescue => e
 					@buf = nil	# clear the buffer

@@ -243,7 +243,9 @@ class SharpLcd < Control::Device
 					do_poll unless self[:warming]
 				end
 			}
-			
+		elsif data == "Password:Login incorrect"
+			logger.info "Sharp LCD, bad login or logged off. Attempting login.."
+			do_send(setting(:username))
 			return true
 		elsif data == "OK"
 			return true
@@ -340,7 +342,7 @@ class SharpLcd < Control::Device
 				priority = args[0]
 			end
 			#logger.debug "Sharp sending: #{command}"
-			do_send(value, {:priority => priority, :value_ret_only => value[0..3].to_sym})	# Status polling is a low priority
+			do_send(value.clone, {:priority => priority, :value_ret_only => value[0..3].to_sym})	# Status polling is a low priority
 		end
 	end
 	
@@ -349,6 +351,7 @@ class SharpLcd < Control::Device
 	# Builds the command and creates the checksum
 	#
 	def do_send(command, options = {})
+		command = command.clone
 		command << 0x0D << 0x0A
 		
 		send(command, options)
