@@ -62,6 +62,7 @@ class NecLcd < Control::Device
 		#	Hence the check if timer is nil here
 		#
 		@polling_timer.cancel unless @polling_timer.nil?
+		@polling_timer = nil
 	end
 	
 	def response_delimiter
@@ -300,12 +301,12 @@ class NecLcd < Control::Device
 	def do_poll
 		#power_on?	# The only high priority status query
 		power_on_delay
-		video_input
-		audio_input
 		mute_status
 		volume_status
 		brightness_status
 		contrast_status
+		video_input
+		audio_input
 	end
 
 

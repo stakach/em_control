@@ -51,13 +51,17 @@ class SharpLcd < Control::Device
 		self[:contrast_max] = 60	# multiply by two when VGA selected
 		#self[:error] = []		TODO!!
 		
-		base.default_send_options = {:delay_on_recieve => DelayTime}
+		base.default_send_options = {
+			:delay_on_recieve => DelayTime,		# Delay time required between commands
+			:clear_queue_on_disconnect => true,	# Clear the queue as we need to send login
+			:retry_on_disconnect => false		# Don't retry last command sent
+		}
 		@poll_lock = Mutex.new
 	end
 	
-	def on_update
-		logger.debug "-- Sharp LCD: !!UPDATED!!"
-	end
+	#def on_update
+	#	logger.debug "-- Sharp LCD: !!UPDATED!!"
+	#end
 	
 	def connected
 		do_send(setting(:username))

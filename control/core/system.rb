@@ -37,7 +37,7 @@ module Control
 			dep.devices.select('id').each do |dev|
 				begin
 					inst = DeviceModule.instance_of(dev.id)
-					inst.on_update if (!!updated[inst]) && inst.respond_to?(:on_update)
+					inst.on_update if (!!!updated[inst]) && inst.respond_to?(:on_update)
 				ensure
 					updated[inst] = true
 				end
@@ -47,7 +47,7 @@ module Control
 			dep.logics.select('id').each do |log|
 				begin
 					inst = LogicModule.instance_of(log.id)
-					inst.on_update if (!!updated[inst]) && inst.respond_to?(:on_update)
+					inst.on_update if (!!!updated[inst]) && inst.respond_to?(:on_update)
 				ensure
 					updated[inst] = true
 				end
@@ -121,6 +121,7 @@ module Control
 
 		attr_reader :modules
 		attr_reader :communicator
+		attr_reader :controller
 		attr_accessor :logger
 		
 		

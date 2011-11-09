@@ -122,42 +122,46 @@ module Control
 			# send loop
 			#
 			@wait_queue_proc = Proc.new do |ignore|
-				return if ignore == :shutdown
+				if ignore != :shutdown
 				
-				@dummy_queue.pop {|queue|
-					return if queue == :shutdown
-					
-					if @pri_queue.empty?
-						queue = @send_queue
-					else
-						queue = @pri_queue
-					end
-					
-					begin
-						command = queue.pop
-						if command[:delay] > 0.0
-							delay = @last_sent_at + delay - Time.now.to_f
-							if delay > 0.0
-								EM.add_timer delay_for do
+					@dummy_queue.pop {|queue|
+						if queue != :shutdown
+						
+							if @pri_queue.empty?
+								queue = @send_queue
+							else
+								queue = @pri_queue
+							end
+							
+							begin
+								command = queue.pop
+								if command[:delay] > 0.0
+									delay = @last_sent_at + delay - Time.now.to_f
+									if delay > 0.0
+										EM.add_timer delay_for do
+											process_send(command)
+										end
+									else
+										process_send(command)
+									end
+								else
 									process_send(command)
 								end
-							else
-								process_send(command)
+							rescue => e
+								EM.defer do
+									logger.error "module #{@parent.class} in device_connection.rb, base : error in send loop --"
+									logger.error e.message
+									logger.error e.backtrace
+								end
+							ensure
+								ActiveRecord::Base.clear_active_connections!
+								@wait_queue.pop &@wait_queue_proc
 							end
-						else
-							process_send(command)
+							
 						end
-					rescue => e
-						EM.defer do
-							logger.error "module #{@parent.class} in device_connection.rb, base : error in send loop --"
-							logger.error e.message
-							logger.error e.backtrace
-						end
-					ensure
-						ActiveRecord::Base.clear_active_connections!
-						@wait_queue.pop &@wait_queue_proc
-					end
-				}
+					}
+				
+				end
 			end
 			
 			@wait_queue.push(nil)

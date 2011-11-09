@@ -20,6 +20,18 @@ class PodControl < Control::Logic
 		self[:laptop1] = setting(:laptop1)
 		self[:laptop2] = setting(:laptop2)
 		register(:Display, :input)	# expects display_input_change
+		register(:Display, :power)	# expects display_power_change
+		
+		update_help
+		@polling_timer = periodic_timer(3600) do
+			update_help
+		end
+	end
+	
+	
+	def on_unload
+		@polling_timer.cancel unless @polling_timer.nil?
+		@polling_timer = nil
 	end
 	
 	
@@ -70,14 +82,56 @@ class PodControl < Control::Logic
 			case status.to_s
 				when setting('in-house-pc')
 					self[:input] = 'in-house-pc'
+					if self[:set_default_pc]
+						self[:set_default_pc] = false
+						default_display_config
+					end
 				when setting('laptop1')
 					self[:input] = :laptop1
+					if self[:set_default_laptop1]
+						self[:set_default_laptop1] = false
+						default_display_config
+					end
 				when setting('laptop2')
 					self[:input] = :laptop2
+					if self[:set_default_laptop2]
+						self[:set_default_laptop2] = false
+						default_display_config
+					end
 				else
 					select('in-house-pc')
 			end
 		end
+	end
+	
+	
+	def display_power_changed(on)
+		logger.debug "Pod Control: recieved power change status"
+		if !on	# revert to default values when display is next turned on
+			self[:set_default_laptop1] = true
+			self[:set_default_laptop2] = true
+			self[:set_default_pc] = true
+		else
+			default_display_config
+		end
+	end
+	
+	
+	protected
+	
+	
+	def default_display_config
+		logger.debug "Pod Control: setting default display values"
+		system[:Display].brightness(system[:Display][:brightness_max] / 2)
+		system[:Display].contrast(system[:Display][:contrast_max] / 2)
+	end
+	
+	
+	def update_help
+		self[:help1] = setting('help1')
+		self[:help2] = setting('help2')
+		self[:help3] = setting('help3')
+		self[:name] = system.controller.name
 	end
 
 

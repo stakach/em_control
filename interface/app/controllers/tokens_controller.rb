@@ -2,7 +2,7 @@ require 'uri'
 
 class TokensController < ActionController::Base
 	protect_from_forgery
-	before_filter :auth_user, :except => [:authenticate, :manifest, :new]
+	before_filter :auth_user, :only => [:accept]
 	layout nil
 	
 	
@@ -58,7 +58,7 @@ class TokensController < ActionController::Base
 		# Generate key, populate the session
 		#
 		user = session[:user].present? ? User.find(session[:user]) : nil	# We have to be authed to get here
-		sys = user.control_systems.where('control_systems.id = ?', params[:system]).first
+		sys = user.control_systems.where('control_systems.id = ?', params[:system]).first unless user.nil?
 		if user.present? && sys.present?
 			
 			dev = TrustedDevice.new(params[:trusted_device])
