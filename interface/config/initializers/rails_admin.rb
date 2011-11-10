@@ -3,8 +3,8 @@ RailsAdmin.config do |config|
   config.current_user_method { current_rake db:migrate } #auto-generated
 	
 	
-	config.included_models = ['User', 'Group', 'AuthSource', 'Zone', 'TrustedDevice', 'Dependency', 'Setting', 'ControlSystem', 'ControllerLogic', 'ControllerDevice']
-	config.label_methods << :identifier
+	config.included_models = ['User', 'Group', 'AuthSource', 'Zone', 'TrustedDevice', 'Dependency', 'Setting', 'ControlSystem', 'ControllerLogic', 'ControllerDevice', 'Server']
+	config.label_methods << :identifier << :hostname
 	
 	
 	config.authenticate_with do
@@ -383,5 +383,14 @@ RailsAdmin.config do |config|
 	
 	def trust_label_method
 		"Trusting #{self.reason}"
+	end
+	
+	
+	config.model Server do
+		weight 20
+		
+		field :hostname
+		field :online
+		field :notes
 	end
 end

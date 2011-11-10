@@ -35,7 +35,7 @@ var acaControl = {
 		// options contains: url, system calls, system
 		//
 		var config = {
-			url: null,			// URL of the ACA Control Server
+			servers: null,		// List of ACA Control Servers in priority order
 			system: null,		// The system we are connecting to and authentication details for re-connects
 			auto_auth: null,	// Are we using the manifest authentication system
 			idle_update: null,	// Do we want to auto-update the interface when it is idle
@@ -73,7 +73,7 @@ var acaControl = {
 			var payload = JSON.stringify({ command: command_name, data: Array.prototype.slice.call( arguments, 1 ) });
 			//	Array.prototype.slice.call( arguments, 1 ) gets all the arguments - the first in an array
 	
-			if (state.connection.readyState == state.connection.OPEN) {
+			if (state.connection != null && state.connection.readyState == state.connection.OPEN) {
 				state.connection.send(payload); // <= send JSON data to socket server
 				set_poll();						// Reset polling
 			}
@@ -97,7 +97,7 @@ var acaControl = {
 				bindings[event_name] = bindings[event_name] || [];
 				bindings[event_name].push(callback);
 				
-				if (!system_calls[event_name] && state.connection.readyState == state.connection.OPEN){
+				if (!system_calls[event_name] && state.connection != null && state.connection.readyState == state.connection.OPEN){
 					var args = event_name.split('.');
 					args.splice(0,0, 'register');
 					send.apply( this, args );
@@ -118,7 +118,7 @@ var acaControl = {
 		this.unbind = function (event_name) {
 			delete bindings[event_name];
 			
-			if (state.connection.readyState == state.connection.OPEN){
+			if (state.connection != null && state.connection.readyState == state.connection.OPEN){
 				var args = event_name.split('.');
 				args.splice(0,0, 'unregister');
 				send.apply( this, args );
@@ -171,54 +171,68 @@ var acaControl = {
 		// Sets up a new connection to the remote server
 		//
 		function setup_connection() {
-			if(!!window.WebSocket)
-				state.connection = new window.WebSocket(config.url);
-			else if(!!window.MozWebSocket)
-				state.connection = new window.MozWebSocket(config.url);
-			else
-				return;
-	
-			// dispatch to the right handlers
-			state.connection.onmessage = function (evt) {
-				var json = JSON.parse(evt.data);
-				
-				if (json.event == 'ready') {
-					//
-					// Re-register status events then call ready
-					//
-					for (event_name in bindings) {
-						try {
-							if(!system_calls[event_name]) {
-								var args = event_name.split('.');
-								args.splice(0,0, 'register');
-								send.apply( this, args );
-							}
-						} catch (err) { }
-					}
+			jQuery.ajax('/tokens/servers', {
+				type: 'GET',
+				dataType: 'json',
+				success: function(data, textStatus, jqXHR){
+					config.servers = data;
 					
-					set_poll();	// Set the polling to occur
-				}
-				
-				//
-				// Trigger callbacks
-				//
-				trigger(json.event, json.data);
-			};
+					if(!!window.WebSocket)
+						state.connection = new window.WebSocket("ws://" + config.servers[0].hostname + ":81/");
+					else if(!!window.MozWebSocket)
+						state.connection = new window.MozWebSocket("ws://" + config.servers[0].hostname + ":81/");
+					else
+						return;
 			
-			state.connection.onclose = function () {
-				if (state.connected) {
-					state.connected = false;
-					if(!!state.polling) {
-						clearInterval(state.polling);
-						state.polling = false;
+					// dispatch to the right handlers
+					state.connection.onmessage = function (evt) {
+						var json = JSON.parse(evt.data);
+						
+						if (json.event == 'ready') {
+							//
+							// Re-register status events then call ready
+							//
+							for (event_name in bindings) {
+								try {
+									if(!system_calls[event_name]) {
+										var args = event_name.split('.');
+										args.splice(0,0, 'register');
+										send.apply( this, args );
+									}
+								} catch (err) { }
+							}
+							
+							set_poll();	// Set the polling to occur
+						}
+						
+						//
+						// Trigger callbacks
+						//
+						trigger(json.event, json.data);
+					};
+					
+					state.connection.onclose = function () {
+						if (state.connected) {
+							state.connected = false;
+							if(!!state.polling) {
+								clearInterval(state.polling);
+								state.polling = false;
+							}
+							trigger('close');
+						}
 					}
-					trigger('close');
+					state.connection.onopen = function () {
+						state.connected = true; // prevent multiple disconnect triggers
+						trigger('open');
+					}
+				},
+				error: function(jqXHR, textStatus, errorThrown){
+					//
+					// Damn...
+					//
+					;
 				}
-			}
-			state.connection.onopen = function () {
-				state.connected = true; // prevent multiple disconnect triggers
-				trigger('open');
-			}
+			});
 		}
 		setup_connection();
 		
@@ -228,7 +242,7 @@ var acaControl = {
 		//	We do this in this way for mobile devices when resumed from sleep to ensure they reconnect
 		//
 		function checkResume() {
-			if (state.connection.readyState == state.connection.CLOSED) {
+			if (state.connection == null || state.connection.readyState == state.connection.CLOSED) {
 				setup_connection();
 			}
 		}
@@ -412,7 +426,8 @@ var acaControl = {
 		this.destroy = function(){
 			clearInterval(state.resume);
 			clearInterval(state.updater);
-			state.connection.close();
+			if(state.connection != null)
+				state.connection.close();
 			var i;
 			for(i = 0; i < acaControl.Controllers.length; i = i + 1) {
 				if(acaControl.Controllers[i] == this) {

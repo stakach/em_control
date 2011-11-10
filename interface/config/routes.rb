@@ -33,6 +33,7 @@ Interface::Application.routes.draw do
 	resources :tokens do
 		post	:authenticate,	:on => :collection
 		post	:accept,		:on => :collection
+		get		:servers,		:on => :collection
 	end
 	
 	match 'interfaces/dashboard' => 'interfaces#dashboard'

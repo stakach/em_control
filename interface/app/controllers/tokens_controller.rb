@@ -82,6 +82,11 @@ class TokensController < ActionController::Base
 	end
 	
 	
+	def servers
+		render :json => Server.all
+	end
+	
+	
 	protected
 	
 	
