@@ -228,7 +228,6 @@ jQuery(document).ready(function($) {
 	$.Storage.remove('login_tilda', null);
 	
 	var con = new acaControl.EventsDispatcher({
-		url:"ws://" + location.hostname + ":81/",
 		system: 0
 	});
 	con.bind({
