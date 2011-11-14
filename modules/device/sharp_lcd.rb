@@ -10,18 +10,19 @@
 # (module defined)
 # power
 # warming
+# power_on_delay
 #
 # volume
 # volume_min == 0
-# volume_max
+# volume_max == 31
 #
 # brightness
 # brightness_min == 0
-# brightness_max
+# brightness_max == 31
 #
 # contrast
-# contrast_min = 0
-# contrast_max
+# contrast_min == 0
+# contrast_max == 60
 # 
 # audio_mute
 # 

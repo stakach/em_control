@@ -6,6 +6,7 @@
 #	* laptop2 (input name)
 #	* audio2 (laptop1 and 2 audio input name)
 #	* collaboration_page (address of web page to load for collaboration)
+# 	* help1, help2, help3
 #
 # (module defined)
 # input

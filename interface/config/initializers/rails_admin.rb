@@ -252,6 +252,7 @@ RailsAdmin.config do |config|
 			field :classname
 			field :filename
 			field :description
+			field :default_port
 		end
 	end
 	
@@ -300,6 +301,16 @@ RailsAdmin.config do |config|
 			:dev_label_method
 		end	
 		
+		list do
+			field :control_system
+			field :dependency
+			field :custom_name
+			field :ip
+			field :port
+			field :tls
+			field :udp
+		end
+		
 		group :device_configuration do
 			field :dependency
 			field :ip
@@ -327,8 +338,8 @@ RailsAdmin.config do |config|
 			:dev_label_method
 		end	
 		
-		field :dependency
 		field :control_system
+		field :dependency
 		field :custom_name
 		field :priority
 	end

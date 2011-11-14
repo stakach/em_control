@@ -527,7 +527,7 @@ module Control
 				@default_send_options.merge!(options)
 			}
 			
-			if options[:max_buffer].present?
+			if options[:max_buffer].present? || options[:clear_queue_on_disconnect].present?
 				EM.schedule do
 					@max_buffer = options[:max_buffer] unless options[:max_buffer].nil?
 					@clear_queue_on_disconnect = options[:clear_queue_on_disconnect] unless options[:clear_queue_on_disconnect].nil?

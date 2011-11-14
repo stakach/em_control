@@ -60,7 +60,6 @@ module Control
 		# required by base for send logic
 		#
 		attr_reader :secure_connection
-		attr_reader :status_lock	# not used at the moment
 		attr_reader :systems
 		attr_reader :base
 		

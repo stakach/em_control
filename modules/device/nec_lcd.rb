@@ -299,7 +299,8 @@ class NecLcd < Control::Device
 	
 
 	def do_poll
-		#power_on?	# The only high priority status query
+		send_checksum(:command, "01D6", {:priority => 99})	#power_on?	# avoid high priority
+		
 		power_on_delay
 		mute_status
 		volume_status

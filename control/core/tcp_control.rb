@@ -84,9 +84,13 @@ module Control
 				@connect_retry = @connect_retry || Atomic.new(0)
 				
 				if @clear_queue_on_disconnect
-					@dummy_queue = EM::Queue.new	# === dummy queue (informs when there is data to read from either the high or regular queues)
+					#@dummy_queue = EM::Queue.new	# === dummy queue (informs when there is data to read from either the high or regular queues)
+					@dummy_queue.size().times do
+						@dummy_queue.pop { |val| }
+					end
 					@pri_queue = PriorityQueue.new	# high priority
 					@send_queue = PriorityQueue.new	# regular priority
+					@send_queue.extend(MonitorMixin)
 				end
 				
 				EM.defer do
