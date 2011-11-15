@@ -68,6 +68,11 @@ class PodControl < Control::Logic
 		end
 	end
 	
+	
+	def show_desktop
+		system[:Computer].launch_application('desktop')
+	end
+	
 
 	def start_collaborating
 		system[:Computer].launch_application(setting(:collaboration_page))
