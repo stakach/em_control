@@ -247,6 +247,7 @@ module Control
 						logger.error e.message
 						logger.error e.backtrace
 					end
+					data = [data]
 				end
 			else
 				data = [data]
