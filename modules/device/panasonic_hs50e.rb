@@ -20,7 +20,7 @@
 # output_3
 #
 
-class PanasonicSwitcher < Control::Device
+class PanasonicHs50e < Control::Device
 	DelayTime = 1.0 / 24.0	# Time of 1 video frame to process
 	
 
@@ -28,6 +28,9 @@ class PanasonicSwitcher < Control::Device
 		#
 		# Setup constants
 		#
+		base.default_send_options = {
+			:delay => DelayTime			# minimum delay between sends
+		}
 	end
 	
 	def connected
@@ -53,8 +56,8 @@ class PanasonicSwitcher < Control::Device
 	def response_delimiter
 		0x03	# Used to interpret the end of a message (this is why data values are encoded as ASCII)
 	end
-
-
+	
+	
 	Commands = {
 		:set_bus => 	"SBUS",
 		:request_bus => "QBST"
@@ -109,7 +112,7 @@ class PanasonicSwitcher < Control::Device
 		# 	the usage I'm thinking of is: switch({:a_bus => :sdi_1_in, :b_bus => :dvi_in})
 		#
 		map.each do |output, input|
-			do_send(Commands[:set_bus] + ":#{output}:#{input}", {:wait => false, :delay => DelayTime})
+			do_send(Commands[:set_bus] + ":#{output}:#{input}", {:wait => false})
 			do_send(Commands[:request_bus] + ":#{output}")
 		end
 	end
@@ -119,17 +122,17 @@ class PanasonicSwitcher < Control::Device
 	#
 	# Response callback
 	#
-	def received(data)
+	def received(data, command)
 		#
 		# removes the leading character and ensures we only have the start of this message
 		#
-		data = array_to_str(data).split("" << 0x02)[-1]
+		data = data.split("" << 0x02)[-1]
 		
 		#
 		# removes the 4 byte command string and the leading ':' character
 		#
 		data.shift(5)
-		data = array_to_str(data).split(':')
+		data = data[5..-1].split(':')
 		
 		#
 		# data[0] == bus reference
