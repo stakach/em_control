@@ -1,4 +1,4 @@
-# :title:Extron Digital Matrix Processor
+# :title:Extron IP Control Processor
 #
 # Status information avaliable:
 # -----------------------------
@@ -7,8 +7,14 @@
 # connected
 #
 # (module defined)
+# IO#{port}_mode
+# IO#{port} == status
+# relay#{port} == status
+# power#{port} == status
+# 
 #
-#
+# (Settings)
+# password
 #
 
 class ExtronIpcp505 < Control::Device
@@ -17,9 +23,24 @@ class ExtronIpcp505 < Control::Device
 		#
 		# Setup constants
 		#
+		base.default_send_options = {
+			:clear_queue_on_disconnect => true,	# Clear the queue as we need to send login
+			:retry_on_disconnect => false		# Don't retry last command sent
+		}
+		@poll_lock = Mutex.new
 	end
 
 	def connected
+	end
+	
+	def disconnected
+		#
+		# Disconnected may be called without calling connected
+		#	Hence the check if timer is nil here
+		#
+		@poll_lock.synchronize {
+			@polling_timer.cancel unless @polling_timer.nil?
+		}
 	end
 	
 	
@@ -50,7 +71,7 @@ class ExtronIpcp505 < Control::Device
 			info = IR_INFO[info]
 		end
 		
-		do_send("\e#{file},#{info}IR", {:command => :ir_info, :requested => info})
+		do_send("\e#{file},#{info}IR") #, {:command => :ir_info, :requested => info})
 		# Response: descriptive text
 	end
 	
@@ -85,7 +106,7 @@ class ExtronIpcp505 < Control::Device
 	end
 	
 	def get_io_mode(port)
-		send("#{port.to_s.rjust(2, '0')}[", {:command => :io_mode, :requested => port})
+		send("#{port.to_s.rjust(2, '0')}[") #, {:command => :io_mode, :requested => port})
 		# Response: mode[,upper,lower]
 	end
 	
@@ -108,7 +129,7 @@ class ExtronIpcp505 < Control::Device
 	end
 	
 	def get_io_state(port)
-		send("#{port.to_s.rjust(2, '0')}]", {:command => :io_state, :requested => port})
+		send("#{port.to_s.rjust(2, '0')}]") #, {:command => :io_state, :requested => port})
 	end
 	
 	
@@ -136,7 +157,7 @@ class ExtronIpcp505 < Control::Device
 	end
 	
 	def get_relay_state(port)
-		send("#{port.to_s.rjust(2, '0')}O", {:command => :relay_state, :requested => port})
+		send("#{port.to_s.rjust(2, '0')}O") #, {:command => :relay_state, :requested => port})
 	end
 	
 	
@@ -154,7 +175,7 @@ class ExtronIpcp505 < Control::Device
 	end
 	
 	def get_power_state(port)
-		send("\eP#{port}DCPP", {:command => :power_state, :requested => port})
+		send("\eP#{port}DCPP") #, {:command => :power_state, :requested => port})
 	end
 	
 	
@@ -167,27 +188,15 @@ class ExtronIpcp505 < Control::Device
 	def received(data, command)
 		logger.debug "Extron IPCP sent #{data}"
 		
-		if command.nil? && data =~ /(copyright|password)/i
-			do_send(setting(:password))
-		elsif command.present? && command[:command].present?
-			port = command[:requested]
-			case command[:command]
-			when :power_state
-				self["power#{port}"] = data == '1'
-			when :relay_state
-				self["relay#{port}"] = data == '1'
-			when :io_state
-				self["IO#{port}"] = data.to_i
-			when :io_mode
-				data = data.split(',')
-				self["IO#{port}_mode"] = data[0].to_i
-				if data.length > 1
-					self["IO#{port}_upper"] = data[1].to_i
-					self["IO#{port}_lower"] = data[2].to_i
-				end
-			when :ir_info
-				# ignore. Don't really care about this status
+		if command.nil? && data =~ /Copyright/i
+			pass = setting(:password)
+			if pass.nil?
+				device_ready
+			else
+				do_send(pass)		# Password set
 			end
+		elsif data =~ /Login/i
+			device_ready
 		else
 			case data[0..2].to_sym
 			when :Irs	# IR Sent
@@ -214,6 +223,11 @@ class ExtronIpcp505 < Control::Device
 				data = data.split('*')
 				port = data[0][5..-1].to_i
 				self["power#{port}"] = data[1] == '1'
+			else
+				if data == 'E22'	# Busy! We should retry this one
+					sleep(1)
+					return :failed
+				end
 			end
 		end
 		
@@ -222,7 +236,17 @@ class ExtronIpcp505 < Control::Device
 	
 	
 	private
-
+	
+	
+	def device_ready
+		do_send("\e3CV")	# Verbose mode and tagged responses
+		@poll_lock.synchronize {
+			@polling_timer = periodic_timer(120) do
+				logger.debug "-- Extron Maintaining Connection"
+				send('Q', :priority => 99)	# Low priority poll to maintain connection
+			end
+		}
+	end
 
 	def do_send(data, options = {})
 		send(data << 0x0D, options)

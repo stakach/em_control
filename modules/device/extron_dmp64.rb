@@ -29,10 +29,27 @@ class ExtronDmp64 < Control::Device
 		self[:output_volume_min] = 1048
 		self[:mic_gain_max] = 2298
 		self[:mic_gain_min] = 1698
+		
+		base.default_send_options = {
+			:clear_queue_on_disconnect => true,	# Clear the queue as we need to send login
+			:retry_on_disconnect => false		# Don't retry last command sent
+		}
+		@poll_lock = Mutex.new
 	end
 
 	def connected
 	end
+	
+	def disconnected
+		#
+		# Disconnected may be called without calling connected
+		#	Hence the check if timer is nil here
+		#
+		@poll_lock.synchronize {
+			@polling_timer.cancel unless @polling_timer.nil?
+		}
+	end
+	
 	
 	def call_preset(number)
 		if number < 0 || number > 32
@@ -91,8 +108,15 @@ class ExtronDmp64 < Control::Device
 	def received(data, command)
 		logger.debug "Extron DSP sent #{data}"
 		
-		if command.nil? && data =~ /(copyright|password)/i
-			do_send(setting(:password))
+		if command.nil? && data =~ /Copyright/i
+			pass = setting(:password)
+			if pass.nil?
+				device_ready
+			else
+				do_send(pass)		# Password set
+			end
+		elsif data =~ /Login/i
+			device_ready
 		else
 			case data[0..2].to_sym
 			when :Grp	# Mute or Volume
@@ -108,6 +132,11 @@ class ExtronDmp64 < Control::Device
 				self["mic#{data[7]}_mute"] = data[-1] == '1'	# 1 == true
 			when :Rpr	# Preset called
 				logger.debug "Extron DSP called preset #{data[3..-1]}"
+			else
+				if data == 'E22'	# Busy! We should retry this one
+					sleep(1)
+					return :failed
+				end
 			end
 		end
 		
@@ -116,7 +145,17 @@ class ExtronDmp64 < Control::Device
 	
 	
 	private
-
+	
+	
+	def device_ready
+		do_send("\e3CV")	# Verbose mode and tagged responses
+		@poll_lock.synchronize {
+			@polling_timer = periodic_timer(120) do
+				logger.debug "-- Extron Maintaining Connection"
+				send('Q', :priority => 99)	# Low priority poll to maintain connection
+			end
+		}
+	end
 
 	def do_send(data, options = {})
 		send(data << 0x0D, options)

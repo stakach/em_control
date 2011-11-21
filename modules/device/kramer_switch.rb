@@ -7,12 +7,12 @@
 # connected
 #
 # (module defined)
-# num_inputs
-# num_outputs
+# video_inputs
+# video_outputs
 #
-# output_1 => input
-# output_2
-# output_3
+# video1 => input
+# video2
+# video3
 #
 
 class KramerSwitch < Control::Device
@@ -22,8 +22,8 @@ class KramerSwitch < Control::Device
 		#
 		# Setup constants
 		#
-		self[:num_inputs] = nil
-		self[:num_outputs] = nil
+		#self[:num_inputs] = nil
+		#self[:num_outputs] = nil
 	end
 
 	def connected
@@ -33,7 +33,7 @@ class KramerSwitch < Control::Device
 		get_machine_type
 	end
 
-
+	
 	commands = {
 		:reset_video => 0,
 		:switch_video => 1,
@@ -52,8 +52,11 @@ class KramerSwitch < Control::Device
 			send(command)
 		end
 	end
+	alias :switch :switch_video
 	
-	def received(data)
+	def received(data, command)
+		data = str_to_array(data)
+		
 		return nil if data[0] & 0b1000000 == 0	# Check we are the destination
 
 		data[1] = data[1] & 0b1111111	# input
@@ -62,12 +65,12 @@ class KramerSwitch < Control::Device
 		case data[0] & 0b111111
 		when commands[:define_machine]
 			if data[1] == 1
-				self[:num_inputs] = data[2]
+				self[:video_inputs] = data[2]
 			elsif data[1] == 2
-				self[:num_outputs] = data[2]
+				self[:video_outputs] = data[2]
 			end
 		when commands[:switch_video]
-			self["output_#{data[2]}".to_sym] = data[1]
+			self["video#{data[2]}"] = data[1]
 		end
 	end
 	
