@@ -5,7 +5,7 @@ module Control
 		include Constants
 		include Utilities
 		
-		def initialize(tls)
+		def initialize(tls, makebreak)
 			@systems = []
 
 			#
@@ -13,6 +13,7 @@ module Control
 			#	NOTE:: if changed then change in logic.rb 
 			#
 			@secure_connection = tls
+			@makebreak_connection = makebreak
 			@status = {}
 			@status_lock = Mutex.new
 			@system_lock = Mutex.new
@@ -60,6 +61,7 @@ module Control
 		# required by base for send logic
 		#
 		attr_reader :secure_connection
+		attr_reader :makebreak_connection
 		attr_reader :systems
 		attr_reader :base
 		

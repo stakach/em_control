@@ -42,6 +42,7 @@ module Control
 				:timeout => 5,			# Timeout in seconds
 				:priority => 0,
 				:retry_on_disconnect => true,
+				:force_disconnect => false	# part of make and break options
 			}
 			
 			
@@ -71,6 +72,8 @@ module Control
 			# State
 			#
 			@connected = false
+			@connecting = false
+			@disconnecting = false
 			@com_paused = false
 			
 			@command = nil
@@ -91,7 +94,8 @@ module Control
 			@parent = Modules.loading[0]
 			@parent.setbase(self)
 			
-			@tls_enabled = Atomic.new(@parent.secure_connection)
+			@tls_enabled = @parent.secure_connection
+			@make_break = @parent.makebreak_connection
 			@shutting_down = Atomic.new(false)
 			
 			
@@ -136,9 +140,9 @@ module Control
 							begin
 								command = queue.pop
 								if command[:delay] > 0.0
-									delay = @last_sent_at + delay - Time.now.to_f
+									delay = @last_sent_at + command[:delay] - Time.now.to_f
 									if delay > 0.0
-										EM.add_timer delay_for do
+										EM.add_timer delay do
 											process_send(command)
 										end
 									else
@@ -183,17 +187,13 @@ module Control
 							sending_timeout
 						}
 					else
-						EM.next_tick do
-							@wait_queue.push(nil)
-						end			# keep it rolling!
+						process_next_send(command)
 					end
 				else
 					if @connected
-						EM.next_tick do
-							@wait_queue.push(nil)
-						end				# Ignore sends on disconnected state
+						process_next_send(command)
 					else
-						if command[:retry_on_disconnect]
+						if command[:retry_on_disconnect] || @make_break
 							@pri_queue.push(command, -1)
 						end
 						@com_paused = true
@@ -209,15 +209,24 @@ module Control
 					logger.error e.backtrace
 				end
 				if @connected
-					EM.next_tick do
-						@wait_queue.push(nil)
-					end				# Ignore sends on disconnected state
+					process_next_send(command)
 				else
 					@com_paused = true
 				end
 			end
 		end
 		
+		def process_next_send(command)
+			if command[:force_disconnect]		# Allow connection control
+				close_connection_after_writing
+				@disconnecting = true
+				@com_paused = true
+			else
+				EM.next_tick do
+					@wait_queue.push(nil)	# Allows next response to process
+				end
+			end
+		end
 		
 		#
 		# Data recieved
@@ -373,24 +382,34 @@ module Control
 					
 					if @command[:delay_on_recieve] > 0.0
 						delay_for = (@last_recieve_at + @command[:delay_on_recieve] - Time.now.to_f)
-						@command = nil 			# free memory
 						
 						if delay_for > 0.0
 							EM.add_timer delay_for do
-								@wait_queue.push(nil)
+								process_response_complete
 							end
 						else
-							@wait_queue.push(nil)
+							process_response_complete
 						end
 					else
-						@command = nil 			# free memory
-						@wait_queue.push(nil)
+						process_response_complete
 					end
 				end
 			end
 		end
 		
-		
+		def process_response_complete
+			if (@make_break && @dummy_queue.empty?) || @command[:force_disconnect]
+				close_connection_after_writing
+				@command = nil 			# free memory
+				@disconnecting = true
+				@com_paused = true
+			else
+				@command = nil 			# free memory
+				EM.next_tick do
+					@wait_queue.push(nil)
+				end
+			end
+		end
 		
 		
 		
@@ -468,14 +487,24 @@ module Control
 		def add_to_queue(command, queue)
 			EM.schedule do
 				begin
-					if @connected
-						if @com_paused				# We are calling from connected function
-							command[:priority] = -2	# To ensure this is the first to run.
+					if @connected || @make_break
+						if @com_paused && !@make_break		# We are calling from connected function (and we are connected)
+							command[:priority] = -2	# To ensure this is the first to run.	TODO:: need a more solid way to achieve this
+						elsif @make_break
+							if !@connected && !@connecting
+								EM.next_tick do
+									do_connect
+								end
+							elsif @connected && @disconnecting
+								EM.next_tick do
+									add_to_queue(command, queue)
+								end
+							end
 						end
 						queue.push(command, command[:priority])
-						@dummy_queue.push(nil)	# informs our send loop that we are ready
+						@dummy_queue.push(nil)	# informs our send loop that we have a command loaded
 					end
-				rescue
+				rescue => e
 					EM.defer do
 						logger.error "module #{@parent.class} in device_connection.rb, send : something went terribly wrong to get here --"
 						logger.error e.message

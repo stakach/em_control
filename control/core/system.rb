@@ -264,7 +264,7 @@ module Control
 			#	Load order is controlled by the control_system model based on the ordinal
 			#
 			if not @modules[module_name.to_sym].nil?
-				while @modules["#{module_name}_#{count}".to_sym].nil?
+				while @modules["#{module_name}_#{count}".to_sym].present?
 					count += 1
 				end
 				module_name = "#{module_name}_#{count}"
@@ -283,7 +283,7 @@ module Control
 		
 		
 		def initialize(controller, log_level)
-			super
+			
 			
 			@modules = {}	# controller modules	:name => module instance (device or logic)
 			@communicator = Control::Communicator.new(self)

@@ -108,7 +108,7 @@ module Control
 				#
 				# Instance of a user module
 				#
-				@instance = Modules[controllerDevice.dependency_id].new(controllerDevice.tls)
+				@instance = Modules[controllerDevice.dependency_id].new(controllerDevice.tls, controllerDevice.makebreak)
 				@instance.join_system(@system)
 				@@instances[@device] = @instance
 				@@devices[baselookup] = @instance

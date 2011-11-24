@@ -21,7 +21,7 @@
 #
 
 class PanasonicHs50e < Control::Device
-	DelayTime = 1.0 / 24.0	# Time of 1 video frame to process
+	DelayTime = 1.0 / 25.0	# Time of 1 video frame to process == 24.0
 	
 
 	def on_load
@@ -38,19 +38,12 @@ class PanasonicHs50e < Control::Device
 		# Get current state of the switcher
 		#
 		do_poll
-	
-		@polling_timer = periodic_timer(30) do		# Check every 30 seconds for changes
-			logger.debug "-- Polling Switcher"
-			do_poll
-		end
 	end
 
 	def disconnected
 		#
 		# Disconnected may be called without calling connected
-		#	Hence the check if timer is nil here
 		#
-		@polling_timer.cancel unless @polling_timer.nil?
 	end
 	
 	def response_delimiter
@@ -85,18 +78,19 @@ class PanasonicHs50e < Control::Device
 		:xpt_8 =>	"07",
 		:xpt_9 =>	"08",
 		:xpt_10 =>	"09",
-		:input_1 => "50",
-		:input_2 => "51",
-		:input_3 => "52",
-		:input_4 => "53",
-		:input_5 => "54",
 		:sdi_1_in => "50",
 		:sdi_2_in => "51",
 		:sdi_3_in => "52",
 		:sdi_4_in => "53",
 		:dvi_in => "54",
+		:input_1 => "50",
+		:input_2 => "51",
+		:input_3 => "52",
+		:input_4 => "53",
+		:input_5 => "54",
 		:colour_bar	=> "70",
 		:colour_background	=> "71",
+		:black => "72",
 		:frame_mem_1 => "73",
 		:frame_mem_2 => "74",
 		:pgm	=> "77",
@@ -109,11 +103,14 @@ class PanasonicHs50e < Control::Device
 	def switch(map)
 		#
 		# Need more information on how the device works
-		# 	the usage I'm thinking of is: switch({:a_bus => :sdi_1_in, :b_bus => :dvi_in})
+		# 	the usage I'm thinking of is: switch({:sdi_1_in => :a_bus, :dvi_in => :b_bus})
 		#
-		map.each do |output, input|
-			do_send(Commands[:set_bus] + ":#{output}:#{input}", {:wait => false})
-			do_send(Commands[:request_bus] + ":#{output}")
+		map.each do |input, output|
+			input = input.to_sym if input.class == String
+			output = output.to_sym if output.class == String
+			
+			do_send(Commands[:set_bus] + ":#{ControlBus[output]}:#{CrossPoint[input]}", {:wait => false})
+			do_send(Commands[:request_bus] + ":#{ControlBus[output]}")
 		end
 	end
 	
@@ -127,18 +124,26 @@ class PanasonicHs50e < Control::Device
 		# removes the leading character and ensures we only have the start of this message
 		#
 		data = data.split("" << 0x02)[-1]
+
+
+		logger.debug "HS50E sent #{data}"
+
+		
 		
 		#
 		# removes the 4 byte command string and the leading ':' character
 		#
-		data.shift(5)
 		data = data[5..-1].split(':')
 		
 		#
 		# data[0] == bus reference
 		# data[1] == xpt1-9 or 99 (not assigned)
-		# data[3] == Tally status (this may not be sent depending on the bus?)
+		# data[2] == Tally status (this may not be sent depending on the bus?)
 		#
+		
+		output = ControlBus.invert[data[0]]
+		self[output] = CrossPoint.invert[data[1]]
+		self["#{output}_tally"] = data[2] == '1'
 		
 		return true	# Response was valid
 	end
@@ -147,10 +152,18 @@ class PanasonicHs50e < Control::Device
 	private
 	
 	
+	#
+	# Get the status of all the ports (low priority)
+	#
 	def do_poll
-		#
-		# TODO:: Get the status of all the ports (low priority)
-		#
+		do_send(Commands[:request_bus] + ":#{ControlBus[:a_bus]}", :priority => 99)
+		do_send(Commands[:request_bus] + ":#{ControlBus[:b_bus]}", :priority => 99)
+		do_send(Commands[:request_bus] + ":#{ControlBus[:pgm]}", :priority => 99)
+		do_send(Commands[:request_bus] + ":#{ControlBus[:pvw]}", :priority => 99)
+		do_send(Commands[:request_bus] + ":#{ControlBus[:key_f]}", :priority => 99)
+		do_send(Commands[:request_bus] + ":#{ControlBus[:key_s]}", :priority => 99)
+		do_send(Commands[:request_bus] + ":#{ControlBus[:p_in_p]}", :priority => 99)
+		do_send(Commands[:request_bus] + ":#{ControlBus[:aux]}", :priority => 99)
 	end
 	
 	def do_send(command, options = {})

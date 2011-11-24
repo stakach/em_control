@@ -10,6 +10,24 @@ class StrandVisionNet < Control::Device
 	end
 	
 	
+	
+	def connected
+		@polling_timer = periodic_timer(30) do
+			logger.debug "-- Polling Lighting"
+			set_mode(0, :priority => 99)		# We need to maintain the connection
+		end
+	end
+
+	def disconnected
+		#
+		# Disconnected may be called without calling connected
+		#	Hence the check if timer is nil here
+		#
+		@polling_timer.cancel unless @polling_timer.nil?
+		@polling_timer = nil
+	end
+	
+	
 	#
 	# Start / Learn preset
 	## Preset
@@ -127,8 +145,8 @@ class StrandVisionNet < Control::Device
 	#	send("SC #{room.to_s.rjust(3, '0')} #{channel.to_s.rjust(3, '0')} #{level.to_s.rjust(3, '0')}\r")
 	#end
 	
-	def set_mode(id)
-		send("SM #{id.to_s.rjust(2, '0')}\r")
+	def set_mode(id, options = {})
+		send("SM #{id.to_s.rjust(2, '0')}\r", options)
 	end
 	
 	

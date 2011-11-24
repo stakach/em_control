@@ -46,8 +46,9 @@ module Control
 					@connect_retry.value = 0
 				end
 				
-				if !@tls_enabled.value
+				if !@tls_enabled
 					@connected = true
+					@connecting = false
 					EM.defer do
 						call_connected
 					end
@@ -71,6 +72,7 @@ module Control
 			
 			def ssl_handshake_completed
 				@connected = true
+				@connecting = false
 				EM.defer do
 					call_connected(get_peer_cert)		# this will mark the true connection complete stage for encrypted devices
 				end
@@ -81,9 +83,10 @@ module Control
 				# set offline
 				@buf.flush unless @buf.nil?	# Any incomplete from TCP stream is now invalid
 				@connected = false
+				@disconnecting = false
 				@connect_retry = @connect_retry || Atomic.new(0)
 				
-				if @clear_queue_on_disconnect
+				if @clear_queue_on_disconnect || @make_break
 					#@dummy_queue = EM::Queue.new	# === dummy queue (informs when there is data to read from either the high or regular queues)
 					@dummy_queue.size().times do
 						@dummy_queue.pop { |val| }
@@ -111,14 +114,23 @@ module Control
 								logger.error e.backtrace
 							end
 						}
-						
-					
-						# attempt re-connect
-						#	if !make and break
+					end
+				end
+				
+				if !@make_break
+					do_connect
+				end
+			end
+
+			def do_connect
+				makebreak = @make_break
+				@connecting = true
+				EM.defer do
+					if !@shutting_down.value
 						begin
 							settings = DeviceModule.lookup(@parent)	#.reload # Don't reload here (user driven)
 							
-							if @connect_retry.value == 0
+							if @connect_retry.value == 0 || makebreak
 								begin
 									#
 									# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
@@ -135,7 +147,7 @@ module Control
 										logger.info "-- module #{@parent.class} in tcp_control.rb, unbind --"
 										logger.info "Reconnect failed for #{settings.ip}:#{settings.port}"
 									end
-									do_reconnect(settings)
+									do_reconnect(settings) unless makebreak
 								end
 							else
 								@connect_retry.update { |v| v += 1}

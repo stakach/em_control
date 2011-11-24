@@ -51,7 +51,7 @@ class ExtronIpcp505 < Control::Device
 	# Mode 0 == play once, 1 == play continuously, 2 == stop
 	#
 	def send_ir(port, file, function, mode = 0)
-		#port = 9 + port
+		port = 8 + port
 		do_send("\e#{port.to_s.rjust(2, '0')},#{file},#{function},#{mode}IR")
 		# Response: Irs port,file,function,mode
 	end
