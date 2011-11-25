@@ -101,7 +101,9 @@ class LgLcd < Control::Device
 	# Input selection
 	#
 	INPUTS = {
-		:tv => [0],			# DTV in manual
+		:tv => [0],		# DTV in manual
+		:dtv => [0],
+		:atv => [0],		# Analouge in manual
 		:vga => [96],		# RGB in manual
 		:component => [64],
 		:hdmi => [112, 128, 144, 160],
@@ -114,12 +116,6 @@ class LgLcd < Control::Device
 		144 => :hdmi,
 		160 => :hdmi
 	}
-	INPUT_NUMBER = {
-		0 => 1,
-		1 => 2,
-		2 => 3,
-		3 => 4
-	}
 	def switch_to(input)
 		input = input.to_s if input.class == Symbol
 		
@@ -127,15 +123,15 @@ class LgLcd < Control::Device
 		input = input.delete("0-9").to_sym
 		
 		if val.length > 0
-			do_send('xb', INPUTS[input] & INPUT_NUMBER[val.to_i])
+			do_send('xb', INPUTS[input][0] | (val.to_i - 1))
 		else
-			do_send('xb', INPUTS[input])
+			do_send('xb', INPUTS[input][0])
 		end
 		
-		brightness_status(10)		# higher status than polling commands - lower than input switching
-		contrast_status(10)
+		#brightness_status(10)		# higher status than polling commands - lower than input switching
+		#contrast_status(10)
 
-		logger.debug "LG LCD, requested to switch to: #{input}"
+		logger.debug "LG LCD, requested to switch to: #{input}#{val}"
 	end
 	
 	
@@ -192,9 +188,9 @@ class LgLcd < Control::Device
 		
 		data = data.split(' ')
 		status = data[2][0..1]
-		response = data[2].getbyte(2)
+		response = data[2][2..-1].to_i(16)
 		
-		logger.debug "LG LCD, sent command #{data[0]}: resp #{response}"
+		#logger.debug "LG LCD, sent #{data}"
 		
 		if status == 'OK'
 			case data[0]
@@ -218,13 +214,13 @@ class LgLcd < Control::Device
 					port = response & 0xF0
 					number = response & 0x0F
 					if number > 0
-						self[:input] = "#{INPUTS[port]}#{number}".to_sym
+						self[:input] = "#{INPUTS[port]}#{number + 1}".to_sym
 					else
 						self[:input] = INPUTS[port]
 					end
 			end
 		else
-			if data[2] == 0
+			if response == 0
 				return :abort	# invalid send (don't retry)
 			else
 				return :failed	# retry command
@@ -277,7 +273,7 @@ class LgLcd < Control::Device
 	# Builds the command and sends it
 	#
 	def do_send(command, data, options = {})
-		command = "" << command << ' ' << 0x00 << ' ' << data << "\r"
+		command = "" << command << ' 00 ' << data.to_s(16).rjust(2, '0') << "\r"
 		send(command, options)
 	end
 end
