@@ -58,20 +58,29 @@ class ExtronDxp < Control::Device
 	# No need to wait as commands can be chained
 	#
 	def switch(map)
-		map.each do |input, output|
-			send("#{input}*#{output}!")
+		map.each do |input, outputs|
+			outputs = [outputs] unless outputs.class == Array
+			outputs.each do |output|
+				send("#{input}*#{output}!")
+			end
 		end
 	end
 	
 	def switch_video(map)
-		map.each do |input, output|
-			send("#{input}*#{output}%")
+		map.each do |input, outputs|
+			outputs = [outputs] unless outputs.class == Array
+			outputs.each do |output|
+				send("#{input}*#{output}%")
+			end
 		end
 	end
 	
 	def switch_audio(map)
-		map.each do |input, output|
-			send("#{input}*#{output}$")
+		map.each do |input, outputs|
+			outputs = [outputs] unless outputs.class == Array
+			outputs.each do |output|
+				send("#{input}*#{output}$")
+			end
 		end
 	end
 	

@@ -53,20 +53,29 @@ class ExtronSmx < Control::Device
 	# No need to wait as commands can be chained
 	#
 	def switch(map, plane = 0)
-		map.each do |input, output|
-			send("#{plane}*#{input}*#{output}!")
+		map.each do |input, outputs|
+			outputs = [outputs] unless outputs.class == Array
+			outputs.each do |output|
+				send("#{plane}*#{input}*#{output}!")
+			end
 		end
 	end
 	
 	def switch_video(map, plane = 0)
-		map.each do |input, output|
-			send("#{plane}*#{input}*#{output}%")
+		map.each do |input, outputs|
+			outputs = [outputs] unless outputs.class == Array
+			outputs.each do |output|
+				send("#{plane}*#{input}*#{output}%")
+			end
 		end
 	end
 	
 	def switch_audio(map, plane = 0)
-		map.each do |input, output|
-			send("#{plane}*#{input}*#{output}$")
+		map.each do |input, outputs|
+			outputs = [outputs] unless outputs.class == Array
+			outputs.each do |output|
+				send("#{plane}*#{input}*#{output}$")
+			end
 		end
 	end
 	

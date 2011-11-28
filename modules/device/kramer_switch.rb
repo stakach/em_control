@@ -46,10 +46,13 @@ class KramerSwitch < Control::Device
 				# Switch video
 		command = [1, 0x80, 0x80, 0xFF]
 		
-		map.each do |input, output|
-			command[1] = 0x80 & input
-			command[2] = 0x80 & output
-			send(command)
+		map.each do |input, outputs|
+			outputs = [outputs] unless outputs.class == Array
+			outputs.each do |output|
+				command[1] = 0x80 & input
+				command[2] = 0x80 & output
+				send(command)
+			end
 		end
 	end
 	alias :switch :switch_video

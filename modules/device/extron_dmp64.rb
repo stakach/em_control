@@ -1,4 +1,4 @@
-# :title:Extron Digital Matrix Processor
+# :title:Extron DSP
 #
 # Status information avaliable:
 # -----------------------------
@@ -38,6 +38,7 @@ class ExtronDmp64 < Control::Device
 	end
 
 	def connected
+		
 	end
 	
 	def disconnected
@@ -66,6 +67,13 @@ class ExtronDmp64 < Control::Device
 		do_send("\eG4010#{mic}*#{value}AU")
 		# Response: DsG4010#{mic}*#{value}
 	end
+
+	def adjust_gain_relative(mic, value)	# \e == 0x1B == ESC key
+		current = do_send("\eG#{mic}AU", :emit => "mic#{mic}_gain")
+		do_send("\eG4010#{mic}*#{current + (value * 10)}AU")
+		
+		# Response: DsG4010#{mic}*#{value}
+	end
 	
 	def mute_mic(mic)
 		do_send("\eM4010#{mic}*1AU")
@@ -92,7 +100,18 @@ class ExtronDmp64 < Control::Device
 	end
 	
 	def volume(group, value)	# \e == 0x1B == ESC key
-		do_send("\eD#{group}*#{value}*GRPM")
+		do_send("\eD#{group}*#{value * 10}*GRPM")
+		# Response: GrpmD#{group}*#{value}*GRPM
+	end
+
+	def volume_relative(group, value)	# \e == 0x1B == ESC key
+
+		if value < 0
+			value = -value
+			do_send("\eD#{group}*#{value * 10}-GRPM")
+		else
+			do_send("\eD#{group}*#{value * 10}+GRPM")
+		end
 		# Response: GrpmD#{group}*#{value}*GRPM
 	end
 	
@@ -156,6 +175,9 @@ class ExtronDmp64 < Control::Device
 			end
 		}
 	end
+
+
+	
 
 	def do_send(data, options = {})
 		send(data << 0x0D, options)

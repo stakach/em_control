@@ -133,6 +133,32 @@ class LgLcd < Control::Device
 
 		logger.debug "LG LCD, requested to switch to: #{input}#{val}"
 	end
+
+
+	def channel(number)
+		if self[:input] != :tv
+			switch_to(:tv)
+		end
+
+		command = 'ma 00 ' << (number >> 8 & 0xFF).to_s(16).rjust(2, '0') << ' ' << (number & 0xFF).to_s(16).rjust(2, '0') << " 10\r"
+		send(command)
+	end
+	
+	
+	KEYS = {
+		:program_up => 0x00,
+		:program_down => 0x01,
+		:volume_up => 0x02,
+		:volume_down => 0x03
+	}
+	def remote(key)
+		if key.class == Fixnum
+			do_send('mc', key)
+		else
+			key = key.to_sym if key.class == String
+			do_send('mc', KEYS[key])
+		end
+	end
 	
 	
 	#

@@ -153,47 +153,47 @@ class StrandVisionNet < Control::Device
 	#
 	# Interface
 	#
-	def lock(button)
-		send("LB idd #{button}\r")
+	def lock(button, system = 1)
+		send("LB #{system.to_s.rjust(3, '0')} #{button}\r")
 	end
 	
-	def unlock(button)
-		send("UB idd #{button}\r")
+	def unlock(button, system = 1)
+		send("UB #{system.to_s.rjust(3, '0')} #{button}\r")
 	end
 	
-	def smart_on(id)
-		send("SN idd #{id}\r")
+	def smart_on(id, system = 1)
+		send("SN #{system.to_s.rjust(3, '0')} #{id}\r")
 	end
 	
-	def smart_off(id)
-		send("SF idd #{id}\r")
+	def smart_off(id, system = 1)
+		send("SF #{system.to_s.rjust(3, '0')} #{id}\r")
 	end
 	
-	def send_mimic(button, action)
+	def send_mimic(button, action, system = 1)
 		if [On, :down, :on, 1].include?(action)
 			action = 1
 		else
 			action = 0
 		end
-		send("MC idd #{button} #{action}\r")
+		send("MC #{system.to_s.rjust(3, '0')} #{button} #{action}\r")
 	end
 	
-	def console_button(id, action)
+	def console_button(id, action, system = 1)
 		if [:down, 0].include?(action)
 			action = 0
 		else
 			action = 1
 		end
-		send("CB idd #{id} #{action}\r")
+		send("CB #{system.to_s.rjust(3, '0')} #{id} #{action}\r")
 	end
 	
-	def console_led(id, action)
+	def console_led(id, action, system = 1)
 		if [Off, :off, 0].include?(action)
 			action = 0
 		else
 			action = 1
 		end
-		send("CL idd #{id} #{action}\r")
+		send("CL #{system.to_s.rjust(3, '0')} #{id} #{action}\r")
 	end
 	
 	
