@@ -78,7 +78,7 @@ class LgLcd < Control::Device
 		command = 'ka'
 		
 		if [On, "on", :on].include?(state)
-			do_send(command, 0x01)
+			do_send(command, 0x01, :delay => 7)
 			self[:warming] = true
 			self[:power] = On
 			logger.debug "LG LCD, requested to power on"
@@ -103,12 +103,13 @@ class LgLcd < Control::Device
 	INPUTS = {
 		:tv => [0],		# DTV in manual
 		:dtv => [0],
-		:atv => [0],		# Analouge in manual
+		:atv => [1],		# Analouge in manual
 		:vga => [96],		# RGB in manual
 		:component => [64],
 		:hdmi => [112, 128, 144, 160],
 		
 		0 => :tv,
+		1 => :atv,
 		96 => :vga,
 		64 => :component,
 		112 => :hdmi,
@@ -116,31 +117,35 @@ class LgLcd < Control::Device
 		144 => :hdmi,
 		160 => :hdmi
 	}
-	def switch_to(input)
+	def switch_to(input, options = {})
 		input = input.to_s if input.class == Symbol
 		
 		val = input.delete("^0-9")
 		input = input.delete("0-9").to_sym
 		
-		if val.length > 0
-			do_send('xb', INPUTS[input][0] | (val.to_i - 1))
-		else
-			do_send('xb', INPUTS[input][0])
-		end
-		
-		#brightness_status(10)		# higher status than polling commands - lower than input switching
-		#contrast_status(10)
-
 		logger.debug "LG LCD, requested to switch to: #{input}#{val}"
+		
+		if val.length > 0
+			do_send('xb', INPUTS[input][0] | (val.to_i - 1), options)
+		else
+			do_send('xb', INPUTS[input][0], options)
+		end
 	end
 
 
 	def channel(number)
-		if self[:input] != :tv
-			switch_to(:tv)
+		input = self[:input]
+		
+		if not input.to_s =~ /tv/
+			input = switch_to(:tv, :emit => :input)
 		end
 
-		command = 'ma 00 ' << (number >> 8 & 0xFF).to_s(16).rjust(2, '0') << ' ' << (number & 0xFF).to_s(16).rjust(2, '0') << " 10\r"
+		command = 'ma 00 ' << (number >> 8 & 0xFF).to_s(16).rjust(2, '0') << ' ' << (number & 0xFF).to_s(16).rjust(2, '0')
+		if input == :tv
+			command << " 10\r"	# DTV
+		else
+			command << " 00\r"	# ATV
+		end
 		send(command)
 	end
 	

@@ -299,8 +299,8 @@ module Control
 					begin
 						if command.present?
 							@parent.mark_emit_start(command[:emit]) if command[:emit].present?
-						else
-							logger.debug "Out of order response recieved for: #{@parent.class}"
+						#else
+						#	logger.debug "Out of order response recieved for: #{@parent.class}"
 						end
 						if @parent.respond_to?(:received)
 							result = @parent.received(response, command)
