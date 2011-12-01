@@ -169,6 +169,9 @@ class ExtronSmx < Control::Device
 				if data == 'E22'	# Busy! We should retry this one
 					sleep(1)
 					return :failed
+				elsif data[0] == 'E'
+					logger.info "Extron Error #{ERRORS[data[1..2].to_i]}"
+					logger.info "- for command #{command[:data]}" unless command.nil?
 				end
 			end
 		end
@@ -178,6 +181,21 @@ class ExtronSmx < Control::Device
 	
 	
 	private
+	
+	
+	ERRORS = {
+		1 => 'Invalid input number (number is too large)',
+		10 => 'Invalid command',
+		11 => 'Invalid preset number',
+		12 => 'Invalid output number',
+		13 => 'Invalid parameter',
+		14 => 'Invalid for this configuration',
+		24 => 'Privilege violation',
+		25 => 'Device is not present (invalid plane/slot)',
+		26 => 'Maximum connections exceeded',
+		27 => 'Invalid event number',
+		28 => 'Bad filename or file not found'
+	}
 	
 	
 	def device_ready

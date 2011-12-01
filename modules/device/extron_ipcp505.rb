@@ -227,6 +227,9 @@ class ExtronIpcp505 < Control::Device
 				if data == 'E22'	# Busy! We should retry this one
 					sleep(1)
 					return :failed
+				elsif data[0] == 'E'
+					logger.info "Extron Error #{ERRORS[data[1..2].to_i]}"
+					logger.info "- for command #{command[:data]}" unless command.nil?
 				end
 			end
 		end
@@ -236,6 +239,21 @@ class ExtronIpcp505 < Control::Device
 	
 	
 	private
+	
+	
+	ERRORS = {
+		10 => 'Invalid command',
+		12 => 'Invalid port number',
+		13 => 'Invalid value or parameter',
+		14 => 'Invalid for this configuration',
+		17 => 'System timed out',
+		24 => 'Privilege violation',
+		25 => 'Device is not present (invalid plane/slot)',
+		26 => 'Maximum connections exceeded',
+		27 => 'Invalid event number',
+		28 => 'Bad filename or file not found',
+		31 => 'Attempt to break port pass-through when not set'
+	}
 	
 	
 	def device_ready

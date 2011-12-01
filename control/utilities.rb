@@ -8,6 +8,7 @@ module Control
 		def hex_to_byte(data)	# Assumes string - converts to binary string
 			data.gsub!(/(0x|[^0-9A-Fa-f])*/, "")				# Removes invalid characters
 			output = ""
+			data = "0#{data}" if data.length % 2 > 0
 			data.scan(/.{2}/) { |byte| output << byte.hex}	# Breaks string into an array of characters
 			return output
 		end
@@ -19,7 +20,7 @@ module Control
 			output = ""
 			data.each_byte { |c|
 				s = c.to_s(16)
-				s = "0#{s}" if s.length < 2
+				s = "0#{s}" if s.length % 2 > 0
 				output << s
 			}
 			return output

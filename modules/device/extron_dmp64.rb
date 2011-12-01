@@ -155,6 +155,9 @@ class ExtronDmp64 < Control::Device
 				if data == 'E22'	# Busy! We should retry this one
 					sleep(1)
 					return :failed
+				elsif data[0] == 'E'
+					logger.info "Extron Error #{ERRORS[data[1..2].to_i]}"
+					logger.info "- for command #{command[:data]}" unless command.nil?
 				end
 			end
 		end
@@ -164,6 +167,21 @@ class ExtronDmp64 < Control::Device
 	
 	
 	private
+	
+	
+	ERRORS = {
+		1 => 'Invalid input number (number is too large)',
+		12 => 'Invalid port number',
+		13 => 'Invalid parameter (number is out of range)',
+		14 => 'Not valid for this configuration',
+		17 => 'System timed out',
+		23 => 'Checksum error (for file uploads)',
+		24 => 'Privilege violation',
+		25 => 'Device is not present',
+		26 => 'Maximum connections exceeded',
+		27 => 'Invalid event number',
+		28 => 'Bad filename or file not found'
+	}
 	
 	
 	def device_ready
