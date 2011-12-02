@@ -29,9 +29,9 @@ module Control
 				end
 				@@modules[dep.id] = dep.classname.classify.constantize
 			rescue => e
-				#
-				# TODO:: Log file not found
-				#
+				System.logger.error "device module #{dep.actual_name} error whilst loading"
+				System.logger.error e.message
+				System.logger.error e.backtrace
 			end
 		end
 	end

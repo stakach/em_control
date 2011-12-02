@@ -34,7 +34,7 @@ class KramerSwitch < Control::Device
 	end
 
 	
-	commands = {
+	COMMANDS = {
 		:reset_video => 0,
 		:switch_video => 1,
 		:status_video => 5,
@@ -48,16 +48,24 @@ class KramerSwitch < Control::Device
 		
 		map.each do |input, outputs|
 			outputs = [outputs] unless outputs.class == Array
+			input = input.to_s if input.class == Symbol
+			input = input.to_i if input.class == String
 			outputs.each do |output|
-				command[1] = 0x80 & input
-				command[2] = 0x80 & output
-				send(command)
+				command[1] = 0x80 + input
+				command[2] = 0x80 + output
+				send(command, :wait => false)
+				#
+				# TODO:: request switcher for output status
+				#
+				self["video#{output}"] = input
 			end
 		end
 	end
-	alias :switch :switch_video
+	alias :switch_video :switch
 	
 	def received(data, command)
+		#logger.debug "Kramer sent #{byte_to_hex(data)}"
+		
 		data = str_to_array(data)
 		
 		return nil if data[0] & 0b1000000 == 0	# Check we are the destination
@@ -66,15 +74,17 @@ class KramerSwitch < Control::Device
 		data[2] = data[2] & 0b1111111	# output
 
 		case data[0] & 0b111111
-		when commands[:define_machine]
+		when COMMANDS[:define_machine]
 			if data[1] == 1
 				self[:video_inputs] = data[2]
 			elsif data[1] == 2
 				self[:video_outputs] = data[2]
 			end
-		when commands[:switch_video]
+		when COMMANDS[:status_video]
 			self["video#{data[2]}"] = data[1]
 		end
+		
+		return :success
 	end
 	
 	
@@ -83,7 +93,7 @@ class KramerSwitch < Control::Device
 
 	def get_machine_type
 				# id com,    video
-		command = [62, 0x81, 0x81, 0xFF]
+		command = [62, 0x81, 0x81, 0x81]
 		send(command)	# num inputs
 		command[1] = 0x82
 		send(command)	# num outputs

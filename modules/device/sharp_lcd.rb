@@ -278,14 +278,14 @@ class SharpLcd < Control::Device
 			when :POWR # Power status
 				self[:warming] = false
 				self[:power] = value > 0
-				logger.debug "-- Sharp LCD, power value #{value > 0}"
+				#logger.debug "-- Sharp LCD, power value #{value > 0}"
 			when :INPS # Input status
 				self[:input] = INPUTS[value]
-				logger.debug "-- Sharp LCD, input #{INPUTS[value]}"
+				#logger.debug "-- Sharp LCD, input #{INPUTS[value]}"
 			when :VOLM # Volume status
 				if not self[:audio_mute]
 					self[:volume] = value
-					logger.debug "-- Sharp LCD, volume #{value}"
+					#logger.debug "-- Sharp LCD, volume #{value}"
 				end
 			when :MUTE # Mute status
 				self[:audio_mute] = value == 1
@@ -294,17 +294,17 @@ class SharpLcd < Control::Device
 				else
 					volume_status(0)	# high priority
 				end
-				logger.debug "-- Sharp LCD, muted #{value == 1}"
+				#logger.debug "-- Sharp LCD, muted #{value == 1}"
 			when :CONT # Contrast status
 				value = value / 2 if self[:input] == :vga
 				self[:contrast] = value
-				logger.debug "-- Sharp LCD, contrast #{value}"
+				#logger.debug "-- Sharp LCD, contrast #{value}"
 			when :VLMP # brightness status
 				self[:brightness] = value
-				logger.debug "-- Sharp LCD, brightness #{value}"
+				#logger.debug "-- Sharp LCD, brightness #{value}"
 			when :PWOD
 				self[:power_on_delay] = value
-				logger.debug "-- Sharp LCD, power on delay #{value}s"
+				#logger.debug "-- Sharp LCD, power on delay #{value}s"
 		end
 		
 		return true # Command success?

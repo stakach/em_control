@@ -16,7 +16,7 @@ module Control
 		#
 		# Converts a raw byte string into a hex encoded string
 		#
-		def byte_to_hex(data)	# Assumes string - converts to binary string
+		def byte_to_hex(data)	# Assumes string - converts from a binary string
 			output = ""
 			data.each_byte { |c|
 				s = c.to_s(16)
