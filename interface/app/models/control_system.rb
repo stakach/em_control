@@ -4,6 +4,9 @@ class ControlSystem < ActiveRecord::Base
 	
 	has_many :controller_zones,		:dependent => :destroy
 	has_many :zones,				:through => :controller_zones
+	has_many :user_zones,			:through => :zones
+	has_many :groups,				:through => :user_zones
+	has_many :users,				:through => :groups
 	
 	has_many :trusted_devices,		:dependent => :destroy
 	
