@@ -16,7 +16,7 @@ class PanasonicHe870 < Control::Device
 		self[:pan_right_limit] = 0xD2F5		# CW Limit (Clockwise)
 		self[:tilt_up_limit] = 0x5556
 		self[:tilt_down_limit] = 0x8E38
-		self[:zoom_min] = 0x001
+		self[:zoom_min] = 0x01
 		self[:zoom_max] = 0x999
 		self[:focus_near] = 0x555
 		self[:focus_far] = 0x999
@@ -130,7 +130,7 @@ class PanasonicHe870 < Control::Device
 	end
 	
 	def zoom(level)
-		do_send('AXZ', "#{level.to_s(16).rjust(3, '0')}")
+		do_send('AYZ', "#{level.to_s(16).rjust(3, '0')}")
 	end
 	
 	
@@ -177,7 +177,7 @@ class PanasonicHe870 < Control::Device
 	#
 	def received(data, command)
 
-		#logger.debug "Camera, sent #{data}"
+		#logger.debug "Camera, sent #{data}" unless command.nil?
 
 		case data[0]
 		when 'p' 	# Power
@@ -188,14 +188,18 @@ class PanasonicHe870 < Control::Device
 					self[:power] = Off
 				end
 				
-				return :success if command[:data][1] == 'O'
+				return :success if command.present? && command[:data][1] == 'O'
 			end
 		when 's'	# preset call
 			if data[1] != 'W'				# sWZ == Speed with zoom
-				self[:preset] = data[1..-1].to_i + 1
-				do_poll
+				preset = data[1..-1].to_i + 1
+				if preset != self[:preset]
+					do_poll
+				end
+				self[:preset] = preset
 				
-				return :success if command[:data][0..1] =~ /^#R$|^#M$/
+				
+				return :success if command.present? && command[:data][0..1] =~ /^#R$|^#M$/
 			end
 		when 'a'
 			case data[2]
@@ -203,26 +207,42 @@ class PanasonicHe870 < Control::Device
 				self[:pan] = data[3..6].to_i(16)
 				self[:tilt] = data[6..10].to_i(16)
 				
-				return :success if command[:data][1..3] == 'APC'
+				return :success if command.present? && command[:data][1..3] == 'APC'
 			when 'z'			# Zoom
-				self[:zoom] = data[3..-1].to_i(16)
+				self[:zoom] = (data[3..-1].to_i(16) - 0x554)
 				
-				return :success if command[:data][1..3] == 'AXZ'
+				return :success if command.present? && command[:data][1..3] == 'AYZ'
 			when 'i'			# IRIS
 				self[:iris] = data[3..-1].to_i(16)
 				
-				return :success if command[:data][1..3] == 'AXI'
+				return :success if command.present? && command[:data][1..3] == 'AXI'
 			when 'f' 			# Focus
 				self[:focus] = data[3..-1].to_i(16)
 				
-				return :success if command[:data][1..3] == 'AXF'
+				return :success if command.present? && command[:data][1..3] == 'AXF'
+			end
+		when 'g'
+			case data[1]
+			when 'z'
+				self[:zoom] = data[2..-1].to_i(16)
+				self[:power] = On
+				
+				return :success if command.present? && command[:data][1..2] == 'GZ'
+			when 'f'
+				self[:focus] = data[2..-1].to_i(16)
+				
+				return :success if command.present? && command[:data][1..2] == 'GF'
+			when 'i'
+				self[:iris] = data[2..-1].to_i(16)
+				
+				return :success if command.present? && command[:data][1..2] == 'GI'
 			end
 		when 'd'
 			case data[1]
 			when '3' 	# Iris mode
 				self[:iris_mode] = data[2] == '1' ? :auto : :manual
 				
-				return :success if command[:data][1..2] == 'D3'
+				return :success if command.present? && command[:data][1..2] == 'D3'
 			end
 			
 		when 'r'	# Error Status
@@ -231,7 +251,7 @@ class PanasonicHe870 < Control::Device
 				self[:error] = ERRORS[err]
 			end
 			
-			return :success if command[:data][1..3] == 'RER'
+			return :success if command.present? && command[:data][1..3] == 'RER'
 		when '-'
 			self[:power] = Off
 			return :success
@@ -250,13 +270,13 @@ class PanasonicHe870 < Control::Device
 		zoom_status
 		focus_status
 		iris_status
-		pantilt_status
+		#pantilt_status
 		error_status
-		power_status
+		#power_status use GZ command - if response is '---' then power is off
 	end
 
 
-	private
+	#private
 	
 	
 	ERRORS = {
@@ -278,10 +298,10 @@ class PanasonicHe870 < Control::Device
 
 	OPERATION_CODE = {
 		:power_status => 'O',
-		:zoom_status => 'AXZ',
-		:focus_status => 'AXF',
-		:iris_status => 'AXI',
-		:pantilt_status => 'APC'
+		:zoom_status => 'GZ',
+		:focus_status => 'GF',
+		:iris_status => 'GI',
+		:pantilt_status => 'APC',
 		:error_status => 'RER'
 	}
 	#

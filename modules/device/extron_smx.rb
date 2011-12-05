@@ -54,6 +54,9 @@ class ExtronSmx < Control::Device
 	#
 	def switch(map, plane = 0)
 		map.each do |input, outputs|
+			input = input.to_s if input.class == Symbol
+			input = input.to_i if input.class == String
+
 			outputs = [outputs] unless outputs.class == Array
 			outputs.each do |output|
 				send("#{plane}*#{input}*#{output}!")
@@ -63,6 +66,9 @@ class ExtronSmx < Control::Device
 	
 	def switch_video(map, plane = 0)
 		map.each do |input, outputs|
+			input = input.to_s if input.class == Symbol
+			input = input.to_i if input.class == String
+
 			outputs = [outputs] unless outputs.class == Array
 			outputs.each do |output|
 				send("#{plane}*#{input}*#{output}%")
@@ -72,6 +78,9 @@ class ExtronSmx < Control::Device
 	
 	def switch_audio(map, plane = 0)
 		map.each do |input, outputs|
+			input = input.to_s if input.class == Symbol
+			input = input.to_i if input.class == String
+
 			outputs = [outputs] unless outputs.class == Array
 			outputs.each do |output|
 				send("#{plane}*#{input}*#{output}$")

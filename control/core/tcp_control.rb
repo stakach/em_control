@@ -68,6 +68,8 @@ module Control
 						end
 					end
 				end
+
+				@make_occured = true
 			end
 			
 			def ssl_handshake_completed
@@ -80,13 +82,18 @@ module Control
 			
 
 			def unbind
-				# set offline
-				@buf.flush unless @buf.nil?	# Any incomplete from TCP stream is now invalid
-				@connected = false
+				@connected = false	# set offline
 				@disconnecting = false
+
+				if @flush_buffer_on_disconnect
+					process_response(@buf.flush, nil) unless @buf.nil?
+				else
+					@buf.flush unless @buf.nil?	# Any incomplete from TCP stream is now invalid
+				end
+
 				@connect_retry = @connect_retry || Atomic.new(0)
 				
-				if @clear_queue_on_disconnect || @make_break
+				if @clear_queue_on_disconnect || (@make_break && !@make_occured)
 					#@dummy_queue = EM::Queue.new	# === dummy queue (informs when there is data to read from either the high or regular queues)
 					@dummy_queue.size().times do
 						@dummy_queue.pop { |val| }
@@ -95,6 +102,7 @@ module Control
 					@send_queue = PriorityQueue.new	# regular priority
 					@send_queue.extend(MonitorMixin)
 				end
+				@make_occured = false
 				
 				EM.defer do
 					if !@shutting_down.value
@@ -119,10 +127,20 @@ module Control
 				
 				if !@make_break
 					do_connect
+				elsif @dummy_queue.size() > 0
+					do_connect
 				end
 			end
 
 			def do_connect
+				if @disconnecting
+					EM.next_tick do
+						do_connect
+					end
+					return
+				end
+				return if @connected	# possible to get here
+
 				makebreak = @make_break
 				@connecting = true
 				EM.defer do

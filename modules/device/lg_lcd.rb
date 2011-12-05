@@ -51,7 +51,7 @@ class LgLcd < Control::Device
 	def connected
 		do_poll
 	
-		@polling_timer = periodic_timer(30) do
+		@polling_timer = periodic_timer(60) do
 			logger.debug "Polling Display"
 			do_poll
 		end
@@ -218,6 +218,7 @@ class LgLcd < Control::Device
 	def received(data, command)
 		
 		data = data.split(' ')
+		return :ignore if data.length < 3
 		status = data[2][0..1]
 		response = data[2][2..-1].to_i(16)
 		
@@ -268,7 +269,7 @@ class LgLcd < Control::Device
 		volume_status
 		brightness_status
 		contrast_status
-		video_input
+		video_input if self[:power]
 	end
 
 

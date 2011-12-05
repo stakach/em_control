@@ -74,6 +74,16 @@ module Control
 				end
 			}
 			
+			if @instance.respond_to?(:on_unload)
+				begin
+					@instance.on_unload
+				rescue => e
+					System.logger.error "device module #{@instance.class} error whilst calling: on_unload --"
+					System.logger.error e.message
+					System.logger.error e.backtrace
+				end
+			end
+			
 		end
 		
 

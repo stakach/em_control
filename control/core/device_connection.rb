@@ -74,7 +74,7 @@ module Control
 			@connected = false
 			@connecting = false
 			@disconnecting = false
-			@com_paused = false
+			@com_paused = true
 			
 			@command = nil
 			@waiting = false
@@ -85,6 +85,7 @@ module Control
 			
 			@max_buffer = 1048576	# 1mb, probably overkill for a defualt
 			@clear_queue_on_disconnect = false
+			@flush_buffer_on_disconnect = false
 			
 			
 			#
@@ -95,7 +96,14 @@ module Control
 			@parent.setbase(self)
 			
 			@tls_enabled = @parent.secure_connection
-			@make_break = @parent.makebreak_connection
+			if @parent.makebreak_connection
+				@make_break = true
+				@first_connect = true
+			else
+				@make_break = false
+			end
+			@make_occured = false
+			
 			@shutting_down = Atomic.new(false)
 			
 			
@@ -168,7 +176,7 @@ module Control
 				end
 			end
 			
-			@wait_queue.push(nil)
+			#@wait_queue.push(nil)		Start paused
 			@wait_queue.pop &@wait_queue_proc
 		end
 		
@@ -194,7 +202,7 @@ module Control
 						process_next_send(command)
 					else
 						if command[:retry_on_disconnect] || @make_break
-							@pri_queue.push(command, -1)
+							@pri_queue.push(command, command[:priority] - 99)	# TODO:: Need a better way to jump to front of queue
 						end
 						@com_paused = true
 					end
@@ -334,14 +342,16 @@ module Control
 		
 		def sending_timeout
 			@timeout = true
-			if !@processing	# Probably not needed...
+			if !@processing && @connected	# Probably not needed...
 				@processing = true	# Ensure responses go into the queue
+
 				
+				command = @command[:data] unless @command.nil?
 				process_result(:failed)
 				
 				EM.defer do
 					logger.info "module #{@parent.class} timeout"
-					logger.info "A response was not recieved for the current command"
+					logger.info "A response was not recieved for the command: #{command}" unless command.nil?
 				end
 			end
 		end
@@ -471,7 +481,9 @@ module Control
 				queue = @send_queue
 			end
 			
-			add_to_queue(options, queue)
+			EM.schedule do
+				add_to_queue(options, queue)
+			end
 				
 			return false
 		rescue => e
@@ -485,31 +497,30 @@ module Control
 		end
 		
 		def add_to_queue(command, queue)
-			EM.schedule do
-				begin
-					if @connected || @make_break
-						if @com_paused && !@make_break		# We are calling from connected function (and we are connected)
-							command[:priority] = -2	# To ensure this is the first to run.	TODO:: need a more solid way to achieve this
-						elsif @make_break
-							if !@connected && !@connecting
-								EM.next_tick do
-									do_connect
-								end
-							elsif @connected && @disconnecting
-								EM.next_tick do
-									add_to_queue(command, queue)
-								end
+			begin
+				if @connected || @make_break
+					if @com_paused && !@make_break		# We are calling from connected function (and we are connected)
+						command[:priority] -= 99	# To ensure this is the first to run.	TODO:: need a more solid way to achieve this
+					elsif @make_break
+						if !@connected && !@connecting
+							EM.next_tick do
+								do_connect
 							end
+						elsif @connected && @disconnecting
+							EM.next_tick do
+								add_to_queue(command, queue)
+							end
+							return	# Don't add to queue yet
 						end
-						queue.push(command, command[:priority])
-						@dummy_queue.push(nil)	# informs our send loop that we have a command loaded
 					end
-				rescue => e
-					EM.defer do
-						logger.error "module #{@parent.class} in device_connection.rb, send : something went terribly wrong to get here --"
-						logger.error e.message
-						logger.error e.backtrace
-					end
+					queue.push(command, command[:priority])
+					@dummy_queue.push(nil)	# informs our send loop that we have a command loaded
+				end
+			rescue => e
+				EM.defer do
+					logger.error "module #{@parent.class} in device_connection.rb, send : something went terribly wrong to get here --"
+					logger.error e.message
+					logger.error e.backtrace
 				end
 			end
 		end
@@ -541,7 +552,15 @@ module Control
 					logger.error e.backtrace
 				ensure
 					EM.schedule do
-						if @com_paused
+						#
+						# First connect if no commands pushed then we disconnect asap
+						#
+						if @make_break && @first_connect && @dummy_queue.size == 0
+							close_connection_after_writing
+							@disconnecting = true
+							@com_paused = true
+							@first_connect = false
+						elsif @com_paused
 							@com_paused = false
 							@wait_queue.push(nil)
 						end
@@ -557,10 +576,11 @@ module Control
 				@default_send_options.merge!(options)
 			}
 			
-			if options[:max_buffer].present? || options[:clear_queue_on_disconnect].present?
+			if options[:max_buffer].present? || options[:clear_queue_on_disconnect].present? || options[:flush_buffer_on_disconnect].present?
 				EM.schedule do
 					@max_buffer = options[:max_buffer] unless options[:max_buffer].nil?
 					@clear_queue_on_disconnect = options[:clear_queue_on_disconnect] unless options[:clear_queue_on_disconnect].nil?
+					@flush_buffer_on_disconnect = options[:flush_buffer_on_disconnect] unless options[:flush_buffer_on_disconnect].nil?
 				end
 			end
 		end

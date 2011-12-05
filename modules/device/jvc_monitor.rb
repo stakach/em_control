@@ -34,10 +34,16 @@ class JvcMonitor < Control::Device
 	
 	def connected
 		do_send('CN1')	# Connection command - initiate comms
+	
+		@polling_timer = periodic_timer(60) do
+			logger.debug "Polling JVC"
+			do_send('CN1')	# Connection command
+		end
 	end
 
 	def disconnected
-		
+		@polling_timer.cancel unless @polling_timer.nil?
+		@polling_timer = nil
 	end
 	
 	def response_delimiter
@@ -50,11 +56,11 @@ class JvcMonitor < Control::Device
 	#
 	def power(state)
 		if [On, "on", :on].include?(state)
-			do_send('PW1', {:command => :power_on, :timeout => 8})
+			do_send('PW1', {:command => :power_on, :timeout => 8, :wait => false})
 			
 			logger.debug "-- JVC LCD, requested to power on"
 		else
-			do_send('PW1', :command => :power_off)
+			do_send('PW0', :command => :power_off)
 
 			logger.debug "-- JVC LCD, requested to power off"
 		end
@@ -104,6 +110,9 @@ class JvcMonitor < Control::Device
 	def received(data, command)		# Data is default recieved as a string
 		
 		logger.debug "-- JVC LCD, recieved: #{data}"
+		if command.nil?
+			return :success
+		end
 		
 		if data =~ /OK/
 			case command[:command]

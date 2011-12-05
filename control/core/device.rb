@@ -108,7 +108,7 @@ module Control
 		end
 		
 		def setting(name)
-			val = config.settings.where("name = ?", name).first || config.dependency.settings.where("name = ?", name).first
+			val = config.settings.where("name = ?", name.to_s).first || config.dependency.settings.where("name = ?", name.to_s).first
 			
 			if !val.nil?
 				case val.value_type

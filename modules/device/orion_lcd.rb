@@ -31,11 +31,11 @@ class OrionLcd < Control::Device
 	end
 	
 	def connected
-		do_poll
+		self[:power] = Off
 	
-		@polling_timer = periodic_timer(30) do
-			logger.debug "Polling Display"
-			do_poll
+		@polling_timer = periodic_timer(60) do
+			logger.debug "Polling Orion"
+			do_send('FCDR', '000', {:priority => 99, :wait => false})	# Status polling is a low priority
 		end
 	end
 
@@ -67,11 +67,11 @@ class OrionLcd < Control::Device
 			logger.debug "LG LCD, requested to power off"
 		end
 		
-		mute_status(0)
+		unmute_video
 	end
 	
 	def power_on?
-		do_send('PWRR', 'XXX', :emit => :power)
+		self[:power]
 	end
 	
 
@@ -171,7 +171,7 @@ class OrionLcd < Control::Device
 			when :PWR	# Power
 				power = response == "-ON"
 				
-				if power
+				if !self[:power] && power
 					self[:warming] = true
 					one_shot(6) do				# Reactive the interface once the display is online
 						self[:warming] = false	# allow access to the display
@@ -191,38 +191,9 @@ class OrionLcd < Control::Device
 		
 		return :success # Command success
 	end
-	
-
-	def do_poll
-		power_status
-		mute_status
-		video_input
-	end
 
 
 	private
-	
-
-	OPERATION_CODE = {
-		:power_status => 'PWRR',
-		:video_input => 'MINR',
-		:mute_status => 'MUTR'
-	}
-	#
-	# Automatically creates a callable function for each command
-	#	http://blog.jayfields.com/2007/10/ruby-defining-class-methods.html
-	#	http://blog.jayfields.com/2008/02/ruby-dynamically-define-method.html
-	#
-	OPERATION_CODE.each_key do |command|
-		define_method command do |*args|
-			priority = 99
-			if args.length > 0
-				priority = args[0]
-			end
-			message = OPERATION_CODE[command]
-			do_send(message, 'XXX', {:priority => priority})	# Status polling is a low priority
-		end
-	end
 	
 
 	#
