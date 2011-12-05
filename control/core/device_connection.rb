@@ -411,7 +411,7 @@ module Control
 			if (@make_break && @dummy_queue.empty?) || @command[:force_disconnect]
 				close_connection_after_writing
 				@command = nil 			# free memory
-				@disconnecting = true
+				@disconnecting = true unless !@connected
 				@com_paused = true
 			else
 				@command = nil 			# free memory

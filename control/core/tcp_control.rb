@@ -83,6 +83,7 @@ module Control
 
 			def unbind
 				@connected = false	# set offline
+				@connecting = false
 				@disconnecting = false
 
 				if @flush_buffer_on_disconnect

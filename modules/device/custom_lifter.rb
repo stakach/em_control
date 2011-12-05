@@ -7,7 +7,7 @@ class CustomLifter < Control::Device
 		base.default_send_options = {
 			:flush_buffer_on_disconnect => true,
 			:force_disconnect => true,
-			:timeout => 240,
+			:timeout => 360,
 			:max_waits => 6,
 			#:retries => 0,
 			:delay_on_recieve => 4
@@ -16,13 +16,11 @@ class CustomLifter < Control::Device
 		@fail_mutex = Mutex.new
 		@fail_count = 0
 
-		self[:position_max] = setting(:max_height) || 13200
+		self[:position_max] = 13200
 		self[:position_min] = 0
 
 		@polling_timer = periodic_timer(90) do
 			logger.debug "Polling Lifter"
-			
-			self[:position_max] = setting(:max_height) || 13200 # here so we can update the height
 
 			#
 			# Get position here
@@ -107,7 +105,7 @@ class CustomLifter < Control::Device
 				@fail_mutex.synchronize {
 					@fail_count += 1
 					if @fail_count <= 3
-						send(command[:data])
+						send(command[:data], :delay_on_recieve => 10)
 					else
 						self[:error] = data
 					end
