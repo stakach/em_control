@@ -164,21 +164,24 @@ class Communicator
 					interface.notify(mod_sym, status, theVal)
 				end
 			rescue => e
-				logger.error "-- in communicator.rb, register : bad interface or user module code --"
-				logger.error e.message
-				logger.error e.backtrace
+				Control.print_error(logger, e, {
+					:message => "in communicator.rb, register : bad interface or user module code",
+					:level => Logger::ERROR
+				})
 			end
 		end
 	rescue => e
-		logger.warn "-- in communicator.rb, register : #{interface.class} called register on a bad module name --"
-		logger.debug e.message
-		logger.debug e.backtrace
+		Control.print_error(logger, e, {
+			:message => "in communicator.rb, register : #{interface.class} called register on a bad module name",
+			:level => Logger::WARN
+		})
 		begin
 			block.call() unless block.nil?	# Block will inform of any errors
 		rescue => x
-			logger.warn "-- in communicator.rb, register : #{interface.class} provided a bad block --"
-			logger.warn x.message
-			logger.warn x.backtrace
+			Control.print_error(logger, x, {
+				:message => "in communicator.rb, register : #{interface.class} provided a bad block",
+				:level => Logger::WARN
+			})
 		end
 	ensure
 		ActiveRecord::Base.clear_active_connections!
@@ -189,7 +192,7 @@ class Communicator
 		status = status.to_sym if status.class == String
 		
 		mod = @system.modules[mod_sym].instance
-		logger.debug "-- Interface #{interface.class} unregistered #{mod_sym}:#{status}"
+		logger.debug "Interface #{interface.class} unregistered #{mod_sym}:#{status}"
 
 		@status_lock.synchronize {
 			@status_register[mod] ||= {}
@@ -207,15 +210,16 @@ class Communicator
 			#end
 		}
 	rescue => e
-		logger.warn "-- in communicator.rb, unregister : #{interface.class} called unregister when it was not needed --"
+		logger.warn "in communicator.rb, unregister : #{interface.class} called unregister when it was not needed"
 		#logger.warn e.message
 		#logger.warn e.backtrace
 		begin
 			block.call() if !block.nil?	# Block will inform of any errors
 		rescue => x
-			logger.warn "-- in communicator.rb, unregister : #{interface.class} provided a bad block --"
-			logger.warn x.message
-			logger.warn x.backtrace
+			Control.print_error(logger, x, {
+				:message => "in communicator.rb, unregister : #{interface.class} provided a bad block",
+				:level => Logger::WARN
+			})
 		end
 	end
 
@@ -237,9 +241,10 @@ class Communicator
 							interface.notify(mod, status, data)
 						end
 					rescue => e
-						logger.error "-- in communicator.rb, update : bad interface or user module code --"
-						logger.error e.message
-						logger.error e.backtrace
+						Control.print_error(logger, e, {
+							:message => "in communicator.rb, update : bad interface or user module code",
+							:level => Logger::ERROR
+						})
 					ensure
 						ActiveRecord::Base.clear_active_connections!
 					end
@@ -247,9 +252,10 @@ class Communicator
 			end
 		}
 	rescue => e
-		logger.error "-- in communicator.rb, update : I hope no one ever sees this --"
-		logger.error e.message
-		logger.error e.backtrace
+		Control.print_error(logger, e, {
+			:message => "in communicator.rb, update : This should never happen",
+			:level => Logger::ERROR
+		})
 	end
 	
 	#
@@ -268,15 +274,17 @@ class Communicator
 				@system.modules[mod].instance.public_send(command, *args)	# Not send string however call function command
 			}
 		rescue => e
-			logger.warn "-- module #{mod} in communicator.rb, send_command : command unavaliable or bad module code --"
-			logger.warn e.message
-			logger.warn e.backtrace
+			Control.print_error(logger, e, {
+				:message => "module #{mod} in communicator.rb, send_command : command unavaliable or bad module code",
+				:level => Logger::WARN
+			})
 			begin
 				block.call() unless block.nil?	# Block will inform of any errors
 			rescue => x
-				logger.error "-- in communicator.rb, send_command : interface provided bad block --"
-				logger.error x.message
-				logger.error x.backtrace
+				Control.print_error(logger, x, {
+					:message => "in communicator.rb, send_command : interface provided bad block",
+					:level => Logger::ERROR
+				})
 			end
 		ensure
 			ActiveRecord::Base.clear_active_connections!

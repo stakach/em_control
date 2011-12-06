@@ -197,9 +197,10 @@ class HTML5Monitor
 		@data_lock.synchronize {
 			logger = @system.nil? ? logger = Control::System.logger : @system.logger
 		}
-		logger.error "-- in html5.rb, recieve : probably malformed JSON data --"
-		logger.error e.message
-		logger.error e.backtrace
+		Control.print_error(logger, e, {
+			:message => "in html5.rb, recieve : probably malformed JSON data",
+			:level => Logger::ERROR
+		})
 	end
 	
 	def shutdown
@@ -230,10 +231,10 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 				HTML5Monitor.register(id)
 				Control::System.logger.debug 'HTML5 browser connected'
 			rescue => e
-				logger = Control::System.logger
-				logger.error "-- in html5.rb, onopen in register : client could not be joined --"
-				logger.error e.message
-				logger.error e.backtrace
+				Control.print_error(Control::System.logger, e, {
+					:message => "in html5.rb, onopen in register : client could not be joined",
+					:level => Logger::ERROR
+				})
 			end
 		end
 		
@@ -246,10 +247,10 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 				begin
 					HTML5Monitor.receive(id, data)
 				rescue => e
-					logger = Control::System.logger
-					logger.error "-- in html5.rb, onmessage : client did not exist (we may have been shutting down) --"
-					logger.error e.message
-					logger.error e.backtrace
+					Control.print_error(Control::System.logger, e, {
+						:message => "in html5.rb, onmessage : client did not exist (we may have been shutting down)",
+						:level => Logger::ERROR
+					})
 				ensure
 					ActiveRecord::Base.clear_active_connections!	# Clear any unused connections
 				end
@@ -262,22 +263,27 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 					HTML5Monitor.unregister(id)
 					Control::System.logger.debug "There are now #{HTML5Monitor.count} HTML5 clients connected"
 				rescue => e
-					logger = Control::System.logger
-					logger.error "-- in html5.rb, onclose : unregistering client did not exist (we may have been shutting down) --"
-					logger.error e.message
-					logger.error e.backtrace
+					Control.print_error(Control::System.logger, e, {
+						:message => "in html5.rb, onclose : unregistering client did not exist (we may have been shutting down)",
+						:level => Logger::ERROR
+					})
 				end
 			end
 		}
 		
 		socket.onerror { |error|
-			#if error.kind_of?(EM::WebSocket::WebSocketError)
+			if !error.kind_of?(EM::WebSocket::WebSocketError)
 				EM.defer do
-					logger.error "-- in html5.rb, onerror : issue with websocket data --"
-					logger.error e.message
-					logger.error e.backtrace
+					Control.print_error(Control::System.logger, error, {
+						:message => "in html5.rb, onerror : issue with websocket data",
+						:level => Logger::ERROR
+					})
 				end
-			#end
+			else
+				EM.defer do
+					Control::System.logger.info "in html5.rb, onerror : invalid handshake recieved - #{error.inspect}"
+				end
+			end
 		}
 	}
 

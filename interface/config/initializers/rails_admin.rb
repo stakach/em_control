@@ -306,6 +306,7 @@ RailsAdmin.config do |config|
 			field :dependency
 			field :custom_name
 			field :ip
+			field :priority
 			field :port
 			field :tls
 			field :udp

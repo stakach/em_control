@@ -1,6 +1,56 @@
 
 
 module Control
+	def self.print_error(logger, e, options = {})
+
+		begin
+			level = options[:level] || Logger::INFO
+			logger.add(level) do
+				message = options[:message].nil? ? "" : "%p" % options[:message]
+				message += "\n#{e.message}"
+				e.backtrace.each {|line| message += "\n#{line}"}
+				message
+			end
+		rescue
+		end
+
+	end
+	
+	class TimerWrapper
+		def initialize(ref = nil, &block)
+			@reference = ref
+			@callback = block
+		end
+		
+		def reference=(ref)
+			@reference = ref if @reference.nil?
+		end
+		
+		def interval
+			if @reference.respond_to?(:interval)
+				return @reference.interval
+			end
+			return nil
+		end
+		
+		def interval=(time)
+			if @reference.respond_to?(:interval)
+				@reference.interval = time
+			end
+		end
+		
+		def cancel
+			if @reference.present?
+				@reference.cancel
+				@reference = nil
+			end
+			if @callback.present?
+				@callback.call(self)
+				@callback = nil
+			end
+		end
+	end
+	
 	module Utilities
 		#
 		# Converts a hex encoded string into a raw byte string
@@ -44,10 +94,12 @@ module Control
 		# Creates a new threaded task
 		#
 		def task(callback = nil, &block)
-			if callback.nil?
-				EM.defer &block					# Higher performance using blocks?
-			else
-				EM.defer(nil, callback, &block)
+			EM.defer(nil, callback) do
+				begin
+					block.call
+				rescue => e
+					Control.print_error(System.logger, e, :message => "Error in task")
+				end
 			end
 		end
 		
@@ -57,7 +109,32 @@ module Control
 		#
 		def periodic_timer(time, &block)
 			timer = EM::PeriodicTimer.new(time) do
-				EM.defer &block
+				EM.defer do
+					begin
+						block.call
+					rescue => e
+						Control.print_error(System.logger, e, :message => "Error in periodic timer")
+					end
+				end
+			end
+			
+			#
+			# Check if we are an instance of device or logic
+			#
+			if (self.class.ancestors & [Control::Device, Control::Logic]).length > 0
+				@status_lock.synchronize {
+					@active_timers = @active_timers || [].extend(MonitorMixin)
+				}
+				
+				timer = TimerWrapper.new(timer) do |timer|
+					@active_timers.synchronize {
+						@active_timers.delete(timer)
+					}
+				end
+				
+				@active_timers.synchronize {
+					@active_timers << timer
+				}
 			end
 			return timer
 		end
@@ -66,13 +143,64 @@ module Control
 		# Runs an event once after a particular amount of time
 		#
 		def one_shot(time, &block)
-			timer = EM::Timer.new(time) do
-				EM.defer &block
+			
+			#
+			# Check if we are tracking timers 
+			#
+			capture_timer = (self.class.ancestors & [Control::Device, Control::Logic]).length > 0
+			if capture_timer
+				timer = nil
+				@status_lock.synchronize {
+					@active_timers = @active_timers || [].extend(MonitorMixin)
+				}
+				
+				timer = TimerWrapper.new(timer) do |timer|
+					@active_timers.synchronize {
+						@active_timers.delete(timer)
+					}
+				end
+				
+				@active_timers.synchronize {
+					@active_timers << timer
+				}
+				
+				rem_proc = Proc.new  { |timer|
+					@active_timers.synchronize {
+						@active_timers.delete(timer)
+					}
+				}
 			end
+			
+			#
+			# Create the timer
+			#
+			ref = EM::Timer.new(time) do
+				EM.defer do
+					begin
+						rem_proc.call(timer) unless rem_proc.nil?
+						block.call
+					rescue => e
+						Control.print_error(System.logger, e, :message => "Error in one shot (or shutting down)")
+					end
+				end
+			end
+			
+			#
+			# return the reference
+			#
+			if timer.nil?
+				timer = ref
+			else
+				timer.reference = ref
+			end
+			
 			return timer
 		end
 		
 		
+		#
+		# Makes functions private when included in a class
+		#
 		module_function :hex_to_byte
 		module_function :byte_to_hex
 		module_function :str_to_array

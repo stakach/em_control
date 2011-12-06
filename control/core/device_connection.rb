@@ -120,9 +120,10 @@ module Control
 							task.call
 						}
 					rescue => e
-						logger.error "module #{@parent.class} in device_connection.rb, base : error in task loop --"
-						logger.error e.message
-						logger.error e.backtrace
+						Control.print_error(logger, e, {
+							:message => "module #{@parent.class} in device_connection.rb, base : error in task loop",
+							:level => Logger::ERROR
+						})
 					ensure
 						ActiveRecord::Base.clear_active_connections!
 					end
@@ -161,9 +162,10 @@ module Control
 								end
 							rescue => e
 								EM.defer do
-									logger.error "module #{@parent.class} in device_connection.rb, base : error in send loop --"
-									logger.error e.message
-									logger.error e.backtrace
+									Control.print_error(logger, e, {
+										:message => "module #{@parent.class} in device_connection.rb, base : error in send loop",
+										:level => Logger::ERROR
+									})
 								end
 							ensure
 								ActiveRecord::Base.clear_active_connections!
@@ -212,9 +214,10 @@ module Control
 				# Save the thread in case of bad data in that send
 				#
 				EM.defer do
-					logger.error "module #{@parent.class} in device_connection.rb, process_send : possible bad data --"
-					logger.error e.message
-					logger.error e.backtrace
+					Control.print_error(logger, e, {
+						:message => "module #{@parent.class} in device_connection.rb, process_send : possible bad data",
+						:level => Logger::ERROR
+					})
 				end
 				if @connected
 					process_next_send(command)
@@ -260,9 +263,10 @@ module Control
 				rescue => e
 					@buf = nil	# clear the buffer
 					EM.defer do # Error in a thread
-						logger.error "module #{@parent.class} error whilst setting delimiter --"
-						logger.error e.message
-						logger.error e.backtrace
+						Control.print_error(logger, e, {
+							:message => "module #{@parent.class} error whilst setting delimiter",
+							:level => Logger::ERROR
+						})
 					end
 					data = [data]
 				end
@@ -320,9 +324,10 @@ module Control
 						# save from bad user code (don't want to deplete thread pool)
 						#	This error should be logged in some consistent manner
 						#
-						logger.error "module #{@parent.class} error whilst calling: received --"
-						logger.error e.message
-						logger.error e.backtrace
+						Control.print_error(logger, e, {
+							:message => "module #{@parent.class} error whilst calling: received",
+							:level => Logger::ERROR
+						})
 					ensure
 						if command.present?
 							@parent.mark_emit_end(command[:emit]) if command[:emit].present?
@@ -460,9 +465,10 @@ module Control
 				options[:data] = data
 				options[:retries] = 0 if options[:wait] == false
 			rescue => e
-				logger.error "module #{@parent.class} in device_connection.rb, send : possible bad data or options hash --"
-				logger.error e.message
-				logger.error e.backtrace
+				Control.print_error(logger, e, {
+					:message => "module #{@parent.class} in device_connection.rb, send : possible bad data or options hash",
+					:level => Logger::ERROR
+				})
 				
 				return true
 			end
@@ -490,9 +496,10 @@ module Control
 			#
 			# Save from a fatal error
 			#
-			logger.error "module #{@parent.class} in device_connection.rb, send : something went terribly wrong to get here --"
-			logger.error e.message
-			logger.error e.backtrace
+			Control.print_error(logger, e, {
+				:message => "module #{@parent.class} in device_connection.rb, send : something went terribly wrong to get here",
+				:level => Logger::ERROR
+			})
 			return true
 		end
 		
@@ -518,9 +525,10 @@ module Control
 				end
 			rescue => e
 				EM.defer do
-					logger.error "module #{@parent.class} in device_connection.rb, send : something went terribly wrong to get here --"
-					logger.error e.message
-					logger.error e.backtrace
+					Control.print_error(logger, e, {
+						:message => "module #{@parent.class} in device_connection.rb, send : something went terribly wrong to get here",
+						:level => Logger::ERROR
+					})
 				end
 			end
 		end
@@ -547,9 +555,10 @@ module Control
 					#
 					# save from bad user code (don't want to deplete thread pool)
 					#
-					logger.error "module #{@parent.class} error whilst calling: connect --"
-					logger.error e.message
-					logger.error e.backtrace
+					Control.print_error(logger, e, {
+						:message => "module #{@parent.class} error whilst calling: connect",
+						:level => Logger::ERROR
+					})
 				ensure
 					EM.schedule do
 						#
@@ -602,7 +611,7 @@ module Control
 				
 				EM.defer do
 					begin
-						@parent[:connected] = false
+						@parent[:connected] = false	# Communicator off at this point
 						@parent.clear_emit_waits
 						if @parent.respond_to?(:disconnected)
 							@task_lock.synchronize {
@@ -613,9 +622,10 @@ module Control
 						#
 						# save from bad user code (don't want to deplete thread pool)
 						#
-						logger.error "-- module #{@parent.class} error whilst calling: disconnected on shutdown --"
-						logger.error e.message
-						logger.error e.backtrace
+						Control.print_error(logger, e, {
+							:message => "module #{@parent.class} error whilst calling: disconnected on shutdown",
+							:level => Logger::ERROR
+						})
 					end
 				end
 			end

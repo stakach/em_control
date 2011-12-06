@@ -29,9 +29,10 @@ module Control
 				end
 				@@modules[dep.id] = dep.classname.classify.constantize
 			rescue => e
-				System.logger.error "device module #{dep.actual_name} error whilst loading"
-				System.logger.error e.message
-				System.logger.error e.backtrace
+				Control.print_error(System.logger, e, {
+					:message => "device module #{dep.actual_name} error whilst loading",
+					:level => Logger::ERROR
+				})
 			end
 		end
 	end
@@ -59,6 +60,20 @@ module Control
 		def unload	# should never be called on the reactor thread so no need to defer
 			
 			@instance.base.shutdown(@system)
+			
+			if @instance.respond_to?(:on_unload)
+				begin
+					@instance.on_unload
+				rescue => e
+					Control.print_error(System.logger, e, {
+						:message => "device module #{@instance.class} error whilst calling: on_unload",
+						:level => Logger::ERROR
+					})
+				end
+			end
+			
+			@instance.clear_active_timers
+			
 			@@lookup_lock.synchronize {
 				db = @@lookup[@instance].delete(@device)
 				@@instances.delete(db)
@@ -73,17 +88,6 @@ module Control
 					@@devices.delete(dev)
 				end
 			}
-			
-			if @instance.respond_to?(:on_unload)
-				begin
-					@instance.on_unload
-				rescue => e
-					System.logger.error "device module #{@instance.class} error whilst calling: on_unload --"
-					System.logger.error e.message
-					System.logger.error e.backtrace
-				end
-			end
-			
 		end
 		
 
@@ -153,9 +157,10 @@ module Control
 					begin
 						@instance.on_load
 					rescue => e
-						System.logger.error "-- device module #{@instance.class} error whilst calling: on_load --"
-						System.logger.error e.message
-						System.logger.error e.backtrace
+						Control.print_error(System.logger, e, {
+							:message => "device module #{@instance.class} error whilst calling: on_load",
+							:level => Logger::ERROR
+						})
 					end
 				end
 				
@@ -195,9 +200,10 @@ module Control
 				begin
 					@instance.on_load
 				rescue => e
-					System.logger.error "-- logic module #{@instance.class} error whilst calling: on_load --"
-					System.logger.error e.message
-					System.logger.error e.backtrace
+					Control.print_error(System.logger, e, {
+						:message => "logic module #{@instance.class} error whilst calling: on_load",
+						:level => Logger::ERROR
+					})
 				end
 			end
 		end
@@ -207,11 +213,14 @@ module Control
 				begin
 					@instance.on_unload
 				rescue => e
-					System.logger.error "-- logic module #{@instance.class} error whilst calling: on_unload --"
-					System.logger.error e.message
-					System.logger.error e.backtrace
+					Control.print_error(System.logger, e, {
+						:message => "logic module #{@instance.class} error whilst calling: on_unload",
+						:level => Logger::ERROR
+					})
 				end
 			end
+			
+			@instance.clear_active_timers
 			
 			@@lookup_lock.synchronize {
 				db = @@lookup.delete(@instance)

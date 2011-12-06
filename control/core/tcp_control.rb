@@ -61,9 +61,10 @@ module Control
 							start_tls(certs)
 						rescue => e
 							EM.defer do
-								logger.error "-- module #{@parent.class} error whilst starting TLS with certificates --"
-								logger.error e.message
-								logger.error e.backtrace
+								Control.print_error(logger, e, {
+									:message => "module #{@parent.class} error whilst starting TLS with certificates",
+									:level => Logger::ERROR
+								})
 							end
 						end
 					end
@@ -118,9 +119,10 @@ module Control
 								#
 								# save from bad user code (don't want to deplete thread pool)
 								#
-								logger.error "-- module #{@parent.class} error whilst calling: disconnected --"
-								logger.error e.message
-								logger.error e.backtrace
+								Control.print_error(logger, e, {
+									:message => "module #{@parent.class} error whilst calling: disconnected",
+									:level => Logger::ERROR
+								})
 							end
 						}
 					end
@@ -163,7 +165,7 @@ module Control
 								rescue
 									@connect_retry.value = 2
 									EM.defer do
-										logger.info "-- module #{@parent.class} in tcp_control.rb, unbind --"
+										logger.info "module #{@parent.class} in tcp_control.rb, unbind"
 										logger.info "Reconnect failed for #{settings.ip}:#{settings.port}"
 									end
 									do_reconnect(settings) unless makebreak
@@ -175,7 +177,7 @@ module Control
 								#
 								if @connect_retry.value == 2
 									EM.defer do
-										logger.info "-- module #{@parent.class} in tcp_control.rb, unbind --"
+										logger.info "module #{@parent.class} in tcp_control.rb, unbind"
 										logger.info "Reconnect failed for #{settings.ip}:#{settings.port}"
 									end
 								end		
@@ -184,10 +186,10 @@ module Control
 							end
 						rescue
 							EM.defer do
-								logger.fatal "-- module #{@parent.class} in tcp_control.rb, unbind --"
-								logger.fatal "Failed to lookup settings. Device probably going offline."
-								logger.error e.message
-								logger.error e.backtrace
+								Control.print_error(logger, e, {
+									:message => "module #{@parent.class} in tcp_control.rb, unbind\nFailed to lookup settings. Device probably going offline.",
+									:level => Logger::FATAL
+								})
 							end
 							
 							# Do not attempt to reconnect this device!

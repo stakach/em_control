@@ -43,6 +43,16 @@ module Control
 			}
 		end
 		
+		def clear_active_timers
+			return if @active_timers.nil?
+			
+			@active_timers.synchronize {
+				while @active_timers.length > 0
+					@active_timers[0].cancel
+				end
+			}
+		end
+		
 		
 		#def command_successful(result)			# TODO:: needs a re-think
 		#	@base.process_data_result(result)
