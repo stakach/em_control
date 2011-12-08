@@ -56,13 +56,20 @@ class JvcMonitor < Control::Device
 	#
 	def power(state)
 		if [On, "on", :on].include?(state)
-			do_send('PW1', {:command => :power_on, :timeout => 8, :wait => false})
-			
+			com = 'PW1'
 			logger.debug "-- JVC LCD, requested to power on"
 		else
-			do_send('PW0', :command => :power_off)
-
+			com = 'PW0'
 			logger.debug "-- JVC LCD, requested to power off"
+		end
+		
+		do_send(com, {:timeout => 8}) do |data, command|
+			if data =~ /OK/
+				self[:power] = com == 'PW1'
+				:success
+			else
+				:failed
+			end
 		end
 	end
 	
@@ -86,19 +93,40 @@ class JvcMonitor < Control::Device
 	def switch_to(input)
 		input = input.to_sym if input.class == String
 		
-		do_send(INPUTS[input], {:command => :input, :requested => input, :timeout => 5})
+		do_send(INPUTS[input], {:timeout => 5}) do |data, command|
+			if data =~ /OK/
+				self[:input] = input
+				:success
+			else
+				:failed
+			end
+		end
 
 		logger.debug "-- JVC LCD, requested to switch to: #{input}"
 	end
 	
 	def mute
-		do_send('AMUTE01', :command => :mute)
+		do_send('AMUTE01') do |data, command|
+			if data =~ /OK/
+				self[:mute] = true
+				:success
+			else
+				:failed
+			end
+		end
 		
 		logger.debug "-- JVC LCD, requested to mute video"
 	end
 	
 	def unmute
-		do_send('AMUTE00', :command => :unmute)
+		do_send('AMUTE00') do |data, command|
+			if data =~ /OK/
+				self[:mute] = false
+				:success
+			else
+				:failed
+			end
+		end
 		
 		logger.debug "-- JVC LCD, requested to unmute video"
 	end
@@ -109,29 +137,8 @@ class JvcMonitor < Control::Device
 	#
 	def received(data, command)		# Data is default recieved as a string
 		
-		logger.debug "-- JVC LCD, recieved: #{data}"
-		if command.nil?
-			return :success
-		end
-		
-		if data =~ /OK/
-			case command[:command]
-			when :mute
-				self[:mute] = true
-			when :unmute
-				self[:mute] = false
-			when :power_on
-				self[:power] = On
-			when :power_off
-				self[:power] = Off
-			when :input
-				self[:input] = command[:requested]
-			end
-			
-			return :success
-		else
-			return :failed
-		end
+		#logger.debug "-- JVC LCD, recieved: #{data}"
+		:success
 	end
 
 
@@ -141,9 +148,9 @@ class JvcMonitor < Control::Device
 	#
 	# Builds the command and creates the checksum
 	#
-	def do_send(command, options = {})
+	def do_send(command, options = {}, &block)
 		command = "!00B#{command}\r"
 		
-		send(command, options)
+		send(command, options, &block)
 	end
 end

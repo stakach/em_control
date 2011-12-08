@@ -61,19 +61,6 @@ module Control
 			
 			@instance.base.shutdown(@system)
 			
-			if @instance.respond_to?(:on_unload)
-				begin
-					@instance.on_unload
-				rescue => e
-					Control.print_error(System.logger, e, {
-						:message => "device module #{@instance.class} error whilst calling: on_unload",
-						:level => Logger::ERROR
-					})
-				end
-			end
-			
-			@instance.clear_active_timers
-			
 			@@lookup_lock.synchronize {
 				db = @@lookup[@instance].delete(@device)
 				@@instances.delete(db)

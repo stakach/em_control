@@ -37,10 +37,11 @@ module Control
 				:delay_on_recieve => 0,	# Delay next send after a recieve by x.y seconds (only works when we are waiting for responses)
 				#:emit
 				:max_waits => 3,
+				:callback => nil,		# Alternative to the recieved function
 				:retries => 2,
 				:hex_string => false,
 				:timeout => 5,			# Timeout in seconds
-				:priority => 0,
+				:priority => 50,
 				:retry_on_disconnect => true,
 				:force_disconnect => false	# part of make and break options
 			}
@@ -309,15 +310,31 @@ module Control
 				@send_queue.mon_synchronize {
 					result = :abort
 					begin
-						if command.present?
-							@parent.mark_emit_start(command[:emit]) if command[:emit].present?
-						#else
-						#	logger.debug "Out of order response recieved for: #{@parent.class}"
-						end
 						if @parent.respond_to?(:received)
-							result = @parent.received(response, command)
+							if command.present?
+								@parent.mark_emit_start(command[:emit]) if command[:emit].present?
+								if command[:callback].present?
+									result = command[:callback].call(response, command)
+									
+									#
+									# The data may still be usefull
+									#
+									if [nil, :ignore].include?(result)
+										@parent.received(response, nil)
+									end
+								else
+									result = @parent.received(response, command)
+								end
+							else
+								#	logger.debug "Out of order response recieved for: #{@parent.class}"
+								result = @parent.received(response, nil)
+							end
 						else
-							result = true
+							if command.present? && command[:callback].present?
+								result = command[:callback].call(response, command)
+							else
+								result = true
+							end
 						end
 					rescue => e
 						#
@@ -364,7 +381,7 @@ module Control
 		
 		def process_result(result)
 			if @waiting
-				if (result.nil? || result == :ignore) && @command[:max_waits] > 0
+				if [nil, :ignore].include?(result) && @command[:max_waits] > 0
 					@command[:max_waits] -= 1
 					
 					if @receive_queue.size() > 0
@@ -378,7 +395,7 @@ module Control
 						@processing = false
 					end
 				else					
-					if (result == false || result == :failed) && @command[:retries] > 0 && @pri_queue.length == 0	# assume command failed, we need to retry
+					if [false, :failed].include?(result) && @command[:retries] > 0 && @pri_queue.length == 0	# assume command failed, we need to retry
 						@command[:retries] -= 1
 						@pri_queue.push(@command)
 						@dummy_queue.push(nil)
@@ -414,16 +431,18 @@ module Control
 		
 		def process_response_complete
 			if (@make_break && @dummy_queue.empty?) || @command[:force_disconnect]
-				close_connection_after_writing
-				@command = nil 			# free memory
-				@disconnecting = true unless !@connected
+				if @connected
+					close_connection_after_writing
+					@disconnecting = true
+				end
 				@com_paused = true
 			else
-				@command = nil 			# free memory
 				EM.next_tick do
 					@wait_queue.push(nil)
 				end
 			end
+			
+			@command = nil 			# free memory
 		end
 		
 		
@@ -446,7 +465,7 @@ module Control
 		#
 		# Processes sends in strict order
 		#
-		def do_send_command(data, options = {})
+		def do_send_command(data, options = {}, *args, &block)
 			
 			begin
 				@status_lock.synchronize {
@@ -464,6 +483,11 @@ module Control
 
 				options[:data] = data
 				options[:retries] = 0 if options[:wait] == false
+				
+				if options[:callback].nil? && (args.length > 0 || block.present?)
+					options[:callback] = args[0] unless args.empty? || args[0].class != Proc
+					options[:callback] = block unless block.nil?
+				end
 			rescue => e
 				Control.print_error(logger, e, {
 					:message => "module #{@parent.class} in device_connection.rb, send : possible bad data or options hash",
@@ -626,6 +650,8 @@ module Control
 							:message => "module #{@parent.class} error whilst calling: disconnected on shutdown",
 							:level => Logger::ERROR
 						})
+					ensure
+						@parent.clear_active_timers
 					end
 				end
 			end

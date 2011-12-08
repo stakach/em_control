@@ -38,11 +38,6 @@ class CustomLifter < Control::Device
 		
 	end
 
-	def on_unload
-		@polling_timer.cancel unless @polling_timer.nil?
-		@polling_timer = nil
-	end
-
 	
 	#
 	# Preset selection
