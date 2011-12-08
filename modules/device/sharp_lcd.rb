@@ -140,8 +140,8 @@ class SharpLcd < Control::Device
 		#self[:target_input] = input
 		do_send(INPUTS[input], :timeout => 20)	# does an auto adjust on switch to vga
 		video_input(0)	# high level command
-		brightness_status(10)		# higher status than polling commands - lower than input switching (vid then audio is common)
-		contrast_status(10)
+		brightness_status(60)		# higher status than polling commands - lower than input switching (vid then audio is common)
+		contrast_status(60)
 
 		logger.debug "-- Sharp LCD, requested to switch to: #{input}"
 	end
@@ -160,7 +160,7 @@ class SharpLcd < Control::Device
 		
 		do_send(AUDIO[input])
 		mute_status(0)		# higher status than polling commands - lower than input switching
-		#volume_status(10)	# Mute response requests volume
+		#volume_status(60)	# Mute response requests volume
 		
 		logger.debug "-- Sharp LCD, requested to switch audio to: #{input}"
 	end

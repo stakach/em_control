@@ -14,6 +14,7 @@ require 'Logger'
 #
 require 'rubygems'
 require 'eventmachine'
+require 'em-priority-queue'
 
 
 #

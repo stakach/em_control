@@ -100,9 +100,8 @@ module Control
 					@dummy_queue.size().times do
 						@dummy_queue.pop { |val| }
 					end
-					@pri_queue = PriorityQueue.new	# high priority
-					@send_queue = PriorityQueue.new	# regular priority
-					@send_queue.extend(MonitorMixin)
+					@pri_queue = EM::PriorityQueue.new(:fifo => true)	# high priority
+					@send_queue = EM::PriorityQueue.new(:fifo => true)	# regular priority
 				end
 				@make_occured = false
 				

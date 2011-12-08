@@ -56,17 +56,18 @@ module Control
 			
 			@wait_queue = EM::Queue.new
 			@dummy_queue = EM::Queue.new	# === dummy queue (informs when there is data to read from either the high or regular queues)
-			@pri_queue = PriorityQueue.new	# high priority
-			@send_queue = PriorityQueue.new	# regular priority
+			@pri_queue = EM::PriorityQueue.new(:fifo => true)	# high priority
+			@send_queue = EM::PriorityQueue.new(:fifo => true)	# regular priority
 			
 			
 			#
 			# Locks
 			#
-			@send_queue.extend(MonitorMixin)
 			@recieved_lock = Mutex.new
 			@task_lock = Mutex.new
 			@status_lock = Mutex.new
+			
+			@send_monitor = Object.new.extend(MonitorMixin)
 			
 			
 			#
@@ -147,32 +148,32 @@ module Control
 								queue = @pri_queue
 							end
 							
-							begin
-								command = queue.pop
-								if command[:delay] > 0.0
-									delay = @last_sent_at + command[:delay] - Time.now.to_f
-									if delay > 0.0
-										EM.add_timer delay do
+							queue.pop {|command| 
+								begin
+									if command[:delay] > 0.0
+										delay = @last_sent_at + command[:delay] - Time.now.to_f
+										if delay > 0.0
+											EM.add_timer delay do
+												process_send(command)
+											end
+										else
 											process_send(command)
 										end
 									else
 										process_send(command)
 									end
-								else
-									process_send(command)
+								rescue => e
+									EM.defer do
+										Control.print_error(logger, e, {
+											:message => "module #{@parent.class} in device_connection.rb, base : error in send loop",
+											:level => Logger::ERROR
+										})
+									end
+								ensure
+									ActiveRecord::Base.clear_active_connections!
+									@wait_queue.pop &@wait_queue_proc
 								end
-							rescue => e
-								EM.defer do
-									Control.print_error(logger, e, {
-										:message => "module #{@parent.class} in device_connection.rb, base : error in send loop",
-										:level => Logger::ERROR
-									})
-								end
-							ensure
-								ActiveRecord::Base.clear_active_connections!
-								@wait_queue.pop &@wait_queue_proc
-							end
-							
+							}
 						end
 					}
 				
@@ -307,7 +308,7 @@ module Control
 			return if @shutting_down.value
 			
 			@recieved_lock.synchronize { 	# This lock protects the send queue lock when we are emiting status
-				@send_queue.mon_synchronize {
+				@send_monitor.mon_synchronize {
 					result = :abort
 					begin
 						if @parent.respond_to?(:received)
@@ -458,7 +459,7 @@ module Control
 		end
 		
 		def recieved_lock
-			@send_queue		# for monitor use
+			@send_monitor		# for monitor use
 		end
 		
 		
@@ -502,16 +503,20 @@ module Control
 			# Use a monitor here to allow for re-entrant locking
 			#	This allows for a priority queue and we guarentee order of operations
 			#
-			queue = nil
+			queue = :send
 			begin
-				@send_queue.mon_exit
-				@send_queue.mon_enter
-				queue = @pri_queue		# Prioritise the command
+				@send_monitor.mon_exit
+				@send_monitor.mon_enter
+				queue = :pri		# Prioritise the command
 			rescue
-				queue = @send_queue
 			end
 			
 			EM.schedule do
+				if queue == :send
+					queue = @send_queue
+				else
+					queue = @pri_queue
+				end
 				add_to_queue(options, queue)
 			end
 				
@@ -572,7 +577,7 @@ module Control
 				@parent[:connected] = true
 				
 				begin
-					@send_queue.mon_synchronize { # Any sends in here are high priority (no emits as this function must return)
+					@send_monitor.mon_synchronize { # Any sends in here are high priority (no emits as this function must return)
 						@parent.connected(*args) if @parent.respond_to?(:connected)
 					}
 				rescue => e

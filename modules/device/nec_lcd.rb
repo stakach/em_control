@@ -136,8 +136,8 @@ class NecLcd < Control::Device
 		message += INPUTS[input].to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
 		send_checksum(type, message)
-		brightness_status(10)		# higher status than polling commands - lower than input switching
-		contrast_status(10)
+		brightness_status(60)		# higher status than polling commands - lower than input switching
+		contrast_status(60)
 
 		logger.debug "-- NEC LCD, requested to switch to: #{input}"
 	end
@@ -159,8 +159,8 @@ class NecLcd < Control::Device
 		message += AUDIO[input].to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
 		send_checksum(type, message)
-		mute_status(10)		# higher status than polling commands - lower than input switching
-		volume_status(10)
+		mute_status(60)		# higher status than polling commands - lower than input switching
+		volume_status(60)
 		
 		logger.debug "-- NEC LCD, requested to switch audio to: #{input}"
 	end
