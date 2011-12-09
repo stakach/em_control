@@ -31,8 +31,10 @@ class ExtronDmp64 < Control::Device
 		self[:mic_gain_min] = 1698
 		
 		base.default_send_options = {
-			:clear_queue_on_disconnect => true,	# Clear the queue as we need to send login
 			:retry_on_disconnect => false		# Don't retry last command sent
+		}
+		base.config = {
+			:clear_queue_on_disconnect => true	# Clear the queue as we may need to send login
 		}
 		@poll_lock = Mutex.new
 	end

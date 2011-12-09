@@ -23,7 +23,6 @@ class JvcMonitor < Control::Device
 	#
 	def on_load		
 		base.default_send_options = {
-			:clear_queue_on_disconnect => true,	# Clear the queue as we need to send login
 			:retry_on_disconnect => false		# Don't retry last command sent
 		}
 	end

@@ -5,12 +5,15 @@ class CustomLifter < Control::Device
 		# Setup constants
 		#
 		base.default_send_options = {
-			:flush_buffer_on_disconnect => true,
 			:force_disconnect => true,
 			:timeout => 360,
 			:max_waits => 6,
 			#:retries => 0,
 			:delay_on_recieve => 4
+		}
+		
+		base.config = {
+			:flush_buffer_on_disconnect => true	# Clear the queue as we may need to send login
 		}
 
 		@fail_mutex = Mutex.new

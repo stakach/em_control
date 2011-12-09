@@ -46,18 +46,21 @@ module Control
 				:force_disconnect => false	# part of make and break options
 			}
 			
+			@config = {
+				:max_buffer => 524288,		# 512kb
+				:clear_queue_on_disconnect => false,
+				:flush_buffer_on_disconnect => false,
+				:priority_bonus => 20
+			}
+			
 			
 			#
 			# Queues
 			#
 			@task_queue = Queue.new			# basically we add tasks here that we want to run in a strict order (connect, disconnect)
-			
 			@receive_queue = EM::Queue.new	# So we can process responses in different ways
-			
 			@wait_queue = EM::Queue.new
-			@dummy_queue = EM::Queue.new	# === dummy queue (informs when there is data to read from either the high or regular queues)
-			@pri_queue = EM::PriorityQueue.new(:fifo => true)	# high priority
-			@send_queue = EM::PriorityQueue.new(:fifo => true)	# regular priority
+			@send_queue = EM::PriorityQueue.new(:fifo => true) {|x,y| x < y} # regular priority
 			
 			
 			#
@@ -66,7 +69,6 @@ module Control
 			@recieved_lock = Mutex.new
 			@task_lock = Mutex.new
 			@status_lock = Mutex.new
-			
 			@send_monitor = Object.new.extend(MonitorMixin)
 			
 			
@@ -84,10 +86,6 @@ module Control
 			@last_sent_at = 0.0
 			@last_recieve_at = 0.0
 			@timeout = nil
-			
-			@max_buffer = 1048576	# 1mb, probably overkill for a defualt
-			@clear_queue_on_disconnect = false
-			@flush_buffer_on_disconnect = false
 			
 			
 			#
@@ -139,44 +137,34 @@ module Control
 			@wait_queue_proc = Proc.new do |ignore|
 				if ignore != :shutdown
 				
-					@dummy_queue.pop {|queue|
-						if queue != :shutdown
-						
-							if @pri_queue.empty?
-								queue = @send_queue
-							else
-								queue = @pri_queue
-							end
-							
-							queue.pop {|command| 
-								begin
-									if command[:delay] > 0.0
-										delay = @last_sent_at + command[:delay] - Time.now.to_f
-										if delay > 0.0
-											EM.add_timer delay do
-												process_send(command)
-											end
-										else
+					@send_queue.pop {|command|
+						if command != :shutdown
+							begin
+								if command[:delay] > 0.0
+									delay = @last_sent_at + command[:delay] - Time.now.to_f
+									if delay > 0.0
+										EM.add_timer delay do
 											process_send(command)
 										end
 									else
 										process_send(command)
 									end
-								rescue => e
-									EM.defer do
-										Control.print_error(logger, e, {
-											:message => "module #{@parent.class} in device_connection.rb, base : error in send loop",
-											:level => Logger::ERROR
-										})
-									end
-								ensure
-									ActiveRecord::Base.clear_active_connections!
-									@wait_queue.pop &@wait_queue_proc
+								else
+									process_send(command)
 								end
-							}
+							rescue => e
+								EM.defer do
+									Control.print_error(logger, e, {
+										:message => "module #{@parent.class} in device_connection.rb, base : error in send loop",
+										:level => Logger::ERROR
+									})
+								end
+							ensure
+								ActiveRecord::Base.clear_active_connections!
+								@wait_queue.pop &@wait_queue_proc
+							end
 						end
 					}
-				
 				end
 			end
 			
@@ -187,7 +175,7 @@ module Control
 		
 		def process_send(command)	# this is on the reactor thread
 			begin
-				if !error?
+				if !error? && @connected
 					do_send_data(command[:data])
 					
 					@last_sent_at = Time.now.to_f
@@ -206,7 +194,7 @@ module Control
 						process_next_send(command)
 					else
 						if command[:retry_on_disconnect] || @make_break
-							@pri_queue.push(command, command[:priority] - 99)	# TODO:: Need a better way to jump to front of queue
+							@send_queue.push(command, command[:priority] - (2 * @config[:priority_bonus]))	# Double bonus
 						end
 						@com_paused = true
 					end
@@ -259,7 +247,7 @@ module Control
 						elsif del.class == Fixnum
 							del = "" << del #array_to_str([del & 0xFF])
 						end
-						@buf = BufferedTokenizer.new(del, @max_buffer)    # Call back for character
+						@buf = BufferedTokenizer.new(del, @config[:max_buffer])    # Call back for character
 					end
 					data = @buf.extract(data)
 				rescue => e
@@ -331,8 +319,13 @@ module Control
 								result = @parent.received(response, nil)
 							end
 						else
-							if command.present? && command[:callback].present?
-								result = command[:callback].call(response, command)
+							if command.present? 
+								@parent.mark_emit_start(command[:emit]) if command[:emit].present?
+								if command[:callback].present?
+									result = command[:callback].call(response, command)
+								else
+									result = true
+								end
 							else
 								result = true
 							end
@@ -365,73 +358,74 @@ module Control
 		
 		def sending_timeout
 			@timeout = true
-			if !@processing && @connected	# Probably not needed...
+			if !@processing && @connected && @command.present?	# Probably not needed...
 				@processing = true	# Ensure responses go into the queue
-
 				
-				command = @command[:data] unless @command.nil?
+				command = @command[:data]
 				process_result(:failed)
 				
 				EM.defer do
 					logger.info "module #{@parent.class} timeout"
 					logger.info "A response was not recieved for the command: #{command}" unless command.nil?
 				end
+			elsif !@connected && @command.present? && @command[:wait]
+				if @command[:retry_on_disconnect] || @make_break
+					@send_queue.push(@command, @command[:priority] - (2 * @config[:priority_bonus]))	# Double bonus
+				end
+				@com_paused = true
 			end
 		end
 		
 		
 		def process_result(result)
-			if @waiting
-				if [nil, :ignore].include?(result) && @command[:max_waits] > 0
-					@command[:max_waits] -= 1
-					
-					if @receive_queue.size() > 0
-						@receive_queue.pop { |response|
-							process_response(response, @command)
-						}
-					else
-						@timeout = EM::Timer.new(@command[:timeout]) {
-							sending_timeout
-						}
-						@processing = false
-					end
-				else					
-					if [false, :failed].include?(result) && @command[:retries] > 0 && @pri_queue.length == 0	# assume command failed, we need to retry
-						@command[:retries] -= 1
-						@pri_queue.push(@command)
-						@dummy_queue.push(nil)
-					end
-					
-					#else    result == :abort || result == :success || result == true || waits and retries exceeded
-					
-					@receive_queue.size().times do
-						@receive_queue.pop { |response|
-							process_response(response, nil)
-						}
-					end
-					
+			if [nil, :ignore].include?(result) && @command[:max_waits] > 0
+				@command[:max_waits] -= 1
+				
+				if @receive_queue.size() > 0
+					@receive_queue.pop { |response|
+						process_response(response, @command)
+					}
+				else
+					@timeout = EM::Timer.new(@command[:timeout]) {
+						sending_timeout
+					}
 					@processing = false
-					@waiting = false
+				end
+			else
+				if [false, :failed].include?(result) && @command[:retries] > 0	# assume command failed, we need to retry
+					@command[:retries] -= 1
+					@send_queue.push(@command, @command[:priority] - @config[:priority_bonus])
+				end
+				
+				#else    result == :abort || result == :success || result == true || waits and retries exceeded
+				
+				@receive_queue.size().times do
+					@receive_queue.pop { |response|
+						process_response(response, nil)
+					}
+				end
+				
+				@processing = false
+				@waiting = false
+				
+				if @command[:delay_on_recieve] > 0.0
+					delay_for = (@last_recieve_at + @command[:delay_on_recieve] - Time.now.to_f)
 					
-					if @command[:delay_on_recieve] > 0.0
-						delay_for = (@last_recieve_at + @command[:delay_on_recieve] - Time.now.to_f)
-						
-						if delay_for > 0.0
-							EM.add_timer delay_for do
-								process_response_complete
-							end
-						else
+					if delay_for > 0.0
+						EM.add_timer delay_for do
 							process_response_complete
 						end
 					else
 						process_response_complete
 					end
+				else
+					process_response_complete
 				end
 			end
 		end
 		
 		def process_response_complete
-			if (@make_break && @dummy_queue.empty?) || @command[:force_disconnect]
+			if (@make_break && @send_queue.empty?) || @command[:force_disconnect]
 				if @connected
 					close_connection_after_writing
 					@disconnecting = true
@@ -503,21 +497,19 @@ module Control
 			# Use a monitor here to allow for re-entrant locking
 			#	This allows for a priority queue and we guarentee order of operations
 			#
-			queue = :send
+			bonus = false
 			begin
 				@send_monitor.mon_exit
 				@send_monitor.mon_enter
-				queue = :pri		# Prioritise the command
+				bonus = true
 			rescue
 			end
 			
 			EM.schedule do
-				if queue == :send
-					queue = @send_queue
-				else
-					queue = @pri_queue
+				if bonus
+					options[:priority] -= @config[:priority_bonus]
 				end
-				add_to_queue(options, queue)
+				add_to_queue(options)
 			end
 				
 			return false
@@ -532,11 +524,11 @@ module Control
 			return true
 		end
 		
-		def add_to_queue(command, queue)
+		def add_to_queue(command)
 			begin
 				if @connected || @make_break
-					if @com_paused && !@make_break		# We are calling from connected function (and we are connected)
-						command[:priority] -= 99	# To ensure this is the first to run.	TODO:: need a more solid way to achieve this
+					if @com_paused && !@make_break									# We are calling from connected function (and we are connected)
+						command[:priority] -=  (2 * @config[:priority_bonus])		# Double bonus
 					elsif @make_break
 						if !@connected && !@connecting
 							EM.next_tick do
@@ -544,13 +536,12 @@ module Control
 							end
 						elsif @connected && @disconnecting
 							EM.next_tick do
-								add_to_queue(command, queue)
+								add_to_queue(command)
 							end
 							return	# Don't add to queue yet
 						end
 					end
-					queue.push(command, command[:priority])
-					@dummy_queue.push(nil)	# informs our send loop that we have a command loaded
+					@send_queue.push(command, command[:priority])
 				end
 			rescue => e
 				EM.defer do
@@ -593,7 +584,7 @@ module Control
 						#
 						# First connect if no commands pushed then we disconnect asap
 						#
-						if @make_break && @first_connect && @dummy_queue.size == 0
+						if @make_break && @first_connect && @send_queue.size == 0
 							close_connection_after_writing
 							@disconnecting = true
 							@com_paused = true
@@ -601,6 +592,10 @@ module Control
 						elsif @com_paused
 							@com_paused = false
 							@wait_queue.push(nil)
+						else
+							EM.defer do
+								logger.info "Reconnected, communications not paused."
+							end
 						end
 					end
 				end
@@ -613,13 +608,11 @@ module Control
 			@status_lock.synchronize {
 				@default_send_options.merge!(options)
 			}
-			
-			if options[:max_buffer].present? || options[:clear_queue_on_disconnect].present? || options[:flush_buffer_on_disconnect].present?
-				EM.schedule do
-					@max_buffer = options[:max_buffer] unless options[:max_buffer].nil?
-					@clear_queue_on_disconnect = options[:clear_queue_on_disconnect] unless options[:clear_queue_on_disconnect].nil?
-					@flush_buffer_on_disconnect = options[:flush_buffer_on_disconnect] unless options[:flush_buffer_on_disconnect].nil?
-				end
+		end
+		
+		def config= (options)
+			EM.schedule do
+				@config.merge!(options)
 			end
 		end
 		
@@ -633,9 +626,7 @@ module Control
 				close_connection
 				
 				@wait_queue.push(:shutdown)
-				@dummy_queue.push(:shutdown)
-				@send_queue.push(nil)
-				
+				@send_queue.push(:shutdown)
 				@task_queue.push(nil)
 				
 				EM.defer do

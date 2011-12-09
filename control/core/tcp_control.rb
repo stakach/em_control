@@ -87,7 +87,7 @@ module Control
 				@connecting = false
 				@disconnecting = false
 
-				if @flush_buffer_on_disconnect
+				if @config[:flush_buffer_on_disconnect]
 					process_response(@buf.flush, nil) unless @buf.nil?
 				else
 					@buf.flush unless @buf.nil?	# Any incomplete from TCP stream is now invalid
@@ -95,13 +95,8 @@ module Control
 
 				@connect_retry = @connect_retry || Atomic.new(0)
 				
-				if @clear_queue_on_disconnect || (@make_break && !@make_occured)
-					#@dummy_queue = EM::Queue.new	# === dummy queue (informs when there is data to read from either the high or regular queues)
-					@dummy_queue.size().times do
-						@dummy_queue.pop { |val| }
-					end
-					@pri_queue = EM::PriorityQueue.new(:fifo => true)	# high priority
-					@send_queue = EM::PriorityQueue.new(:fifo => true)	# regular priority
+				if @config[:clear_queue_on_disconnect] || (@make_break && !@make_occured)
+					@send_queue.clear
 				end
 				@make_occured = false
 				
@@ -129,7 +124,7 @@ module Control
 				
 				if !@make_break
 					do_connect
-				elsif @dummy_queue.size() > 0
+				elsif @send_queue.size() > 0
 					do_connect
 				end
 			end

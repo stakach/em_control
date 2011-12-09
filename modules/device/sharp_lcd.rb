@@ -54,9 +54,11 @@ class SharpLcd < Control::Device
 		
 		base.default_send_options = {
 			:delay_on_recieve => DelayTime,		# Delay time required between commands
-			:clear_queue_on_disconnect => true,	# Clear the queue as we need to send login
 			:retry_on_disconnect => false		# Don't retry last command sent
 		}
+		#base.config = {
+		#	:clear_queue_on_disconnect => true	# Clear the queue as we need to send login
+		#}
 		@poll_lock = Mutex.new
 	end
 	
@@ -65,7 +67,7 @@ class SharpLcd < Control::Device
 	#end
 	
 	def connected
-		do_send(setting(:username))
+		do_send(setting(:username), :priority => 0)
 	end
 
 	def disconnected
@@ -237,7 +239,7 @@ class SharpLcd < Control::Device
 		
 		
 		if data == "Login:"
-			do_send(setting(:password), :delay_on_recieve => 5.0)
+			do_send(setting(:password), :delay_on_recieve => 5.0, :priority => 0)
 			return true
 		elsif data == "Password:OK"
 			do_poll
@@ -356,6 +358,8 @@ class SharpLcd < Control::Device
 	# Builds the command and creates the checksum
 	#
 	def do_send(command, options = {})
+		#logger.debug "-- Sharp LCD, sending: #{command}"
+		
 		command = command.clone
 		command << 0x0D << 0x0A
 		
