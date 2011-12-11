@@ -23,8 +23,9 @@ module Control
 			}
 			@uri = URI.parse(settings.ip)
 			@uri.port = settings.port
-			@connection = EventMachine::HttpRequest.new(@uri, @config)
-		
+			@config[:ssl] = parent.certificates if parent.respond_to?(:certificates)
+			#@connection = EventMachine::HttpRequest.new(@uri, @config)
+			
 			@default_request_options = {
 				:wait => true,			# Wait for response
 				:delay => 0,			# Delay next request by x.y seconds
@@ -38,14 +39,16 @@ module Control
 				#
 				# query
 				# body
+				# custom_client => block
 				:path => '/',
-				#
+				#file => path to file for streaming
 				:timeout => 10,			# inactivity_timeout in seconds
 				:connect_timeout => 5,
 				:keepalive => true,
 				:redirects => 0,
 				:verb => :get,
 				:stream => false,		# send chunked data
+				#:stream_closed => block
 				
 				:callback => nil,		# Alternative to the recieved function
 				:errback => nil,
@@ -154,25 +157,92 @@ module Control
 		
 		def process_send(command)	# this is on the reactor thread
 			begin
-				http = @connection.__send__(command[:verb], command)
+				if @connection.nil?
+					@connection = EventMachine::HttpRequest.new(@uri, @config)
+					if @parent.respond_to?(:use_middleware)
+						@parent.use_middleware(@connection)
+					end
+				end
+				
+				if command[:custom_client].nil?
+					http = @connection.__send__(command[:verb], command)
+=begin				else
+					http = @connection.__send__(command[:verb], command) do |*args|
+						begin
+							command[:custom_client].call *args
+						rescue => e
+							#
+							# Save the thread in case of bad data in that send
+							#
+							EM.defer do
+								Control.print_error(logger, e, {
+									:message => "module #{@parent.class} in device_connection.rb, process_send : possible bad data",
+									:level => Logger::ERROR
+								})
+							end
+							
+							process_next_send if command[:wait]
+							
+							raise e	# continue propagation
+						end
+=end					end
+				end
 				
 				@last_sent_at = Time.now.to_f
 				
-				http.callback do
-					process_response(http, command)
+				if command[:stream]
+					http.stream { |chunk|
+						EM.defer {
+							@task_queue.push lambda {
+								if command[:callback].present?
+									command[:callback].call(chunk, command)
+								elsif @parent.respond_to?(:received)
+									@parent.received(chunk, command)
+								end
+							}
+						}
+					}
+					http.callback {
+						#
+						# streaming has finished
+						#
+						on_stream_close(command)
+						if command[:wait]
+							process_next_send
+						end
+					}
+				else
+					http.callback {
+						process_response(http, command)
+					}
 				end
 				
 				if command[:wait]
 					http.errback do
-						command = command[:data]
-						process_result(:failed, command)
+						@connection = nil
 						
-						EM.defer do
-							logger.info "module #{@parent.class} error: #{http.error}"
-							logger.info "A response was not recieved for the command: #{command[:path]}"
+						if !command[:stream]
+							process_result(:failed, command)
+							
+							EM.defer do
+								logger.info "module #{@parent.class} error: #{http.error}"
+								logger.info "A response was not recieved for the command: #{command[:path]}"
+							end
+						else
+							on_stream_close(command)
+							process_next_send
 						end
 					end
+				elsif command[:stream]
+					http.errback do
+						@connection = nil
+						on_stream_close(command)
+					end
+					process_next_send
 				else
+					http.errback do
+						@connection = nil
+					end
 					process_next_send
 				end
 			rescue => e
@@ -187,12 +257,33 @@ module Control
 				end
 				
 				process_next_send
+			ensure
+				@connection = nil unless command[:keepalive]
 			end
 		end
 		
 		def process_next_send
 			EM.next_tick do
 				@wait_queue.push(nil)	# Allows next response to process
+			end
+		end
+		
+		def on_stream_close(command)
+			if command[:stream_closed].present?
+				EM.defer {
+					begin
+						command[:stream_closed].call(command)
+					rescue => e
+						#
+						# save from bad user code (don't want to deplete thread pool)
+						#	This error should be logged in some consistent manner
+						#
+						Control.print_error(logger, e, {
+							:message => "module #{@parent.class} error whilst calling: stream closed",
+							:level => Logger::ERROR
+						})
+					end
+				}
 			end
 		end
 		
@@ -215,18 +306,12 @@ module Control
 					begin
 						@parent.mark_emit_start(command[:emit]) if command[:emit].present?
 						
-						if @parent.respond_to?(:received)
-							if command[:callback].present?
-								result = command[:callback].call(response, command)
-							else
-								result = @parent.received(response, command)
-							end
+						if command[:callback].present?
+							result = command[:callback].call(response, command)
+						elsif @parent.respond_to?(:received)
+							result = @parent.received(response, command)
 						else
-							if command[:callback].present?
-								result = command[:callback].call(response, command)
-							else
-								result = true
-							end
+							result = true
 						end
 					rescue => e
 						#
