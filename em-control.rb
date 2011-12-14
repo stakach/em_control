@@ -15,6 +15,7 @@ require 'Logger'
 require 'rubygems'
 require 'eventmachine'
 require 'em-priority-queue'
+require 'em-http'
 
 
 #
@@ -26,6 +27,7 @@ require File.dirname(__FILE__) + '/control/priority_queue.rb'
 require File.dirname(__FILE__) + '/control/core/modules.rb'
 require File.dirname(__FILE__) + '/control/core/status.rb'
 require File.dirname(__FILE__) + '/control/core/device.rb'
+require File.dirname(__FILE__) + '/control/core/service.rb'
 require File.dirname(__FILE__) + '/control/core/logic.rb'
 require File.dirname(__FILE__) + '/control/interfaces/communicator.rb'
 require File.dirname(__FILE__) + '/control/interfaces/deferred.rb'
@@ -33,7 +35,7 @@ require File.dirname(__FILE__) + '/control/core/system.rb'
 require File.dirname(__FILE__) + '/control/core/device_connection.rb'
 require File.dirname(__FILE__) + '/control/core/datagram_server.rb'
 require File.dirname(__FILE__) + '/control/core/tcp_control.rb'
-
+require File.dirname(__FILE__) + '/control/core/http_service.rb'
 
 
 module Control
@@ -88,13 +90,15 @@ module Control
 			# Load the system based on the database
 			#
 			ControlSystem.all.each do |controller|
-				begin
-				System.logger.debug "Booting #{controller.name}"
-				System.new(controller, @logLevel)
-				rescue => e
-					System.logger.error "error during boot"
-					System.logger.error e.message
-					System.logger.error e.backtrace
+				EM.defer do
+					begin
+						System.logger.debug "Booting #{controller.name}"
+						System.new(controller, @logLevel)
+					rescue => e
+						System.logger.error "error during boot"
+						System.logger.error e.message
+						System.logger.error e.backtrace
+					end
 				end
 			end
 			

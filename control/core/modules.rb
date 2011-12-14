@@ -24,8 +24,12 @@ module Control
 			begin
 				if File.exists?(ROOT_DIR + '/modules/device/' + dep.filename)
 					load ROOT_DIR + '/modules/device/' + dep.filename
-				else
+				elsif File.exists?(ROOT_DIR + '/modules/service/' + dep.filename)
+					load ROOT_DIR + '/modules/service/' + dep.filename
+				elsif File.exists?(ROOT_DIR + '/modules/logic/' + dep.filename)
 					load ROOT_DIR + '/modules/logic/' + dep.filename
+				else
+					raise "File not found!"
 				end
 				@@modules[dep.id] = dep.classname.classify.constantize
 			rescue => e
@@ -37,7 +41,10 @@ module Control
 		end
 	end
 
-
+	#
+	# TODO:: Consider allowing different dependancies use the same connection
+	# 	Means only the first will call recieved - others must use recieve blocks
+	#
 	class DeviceModule
 		@@instances = {}	# db id => @instance
 		@@dbentry = {}		# db id => db instance
@@ -98,7 +105,7 @@ module Control
 	
 	
 		def instantiate_module(controllerDevice)
-			if Modules[controllerDevice.dependency.id].nil?
+			if Modules[controllerDevice.dependency_id].nil?
 				Modules.load_module(controllerDevice.dependency)		# This is the re-load code function (live bug fixing - removing functions does not work)
 			end			
 			
@@ -117,7 +124,7 @@ module Control
 			
 				devBase = nil
 				Modules.load_lock.synchronize {
-					Modules.loading = [@instance, @system]
+					Modules.loading = @instance
 					
 					if !controllerDevice.udp
 						begin
@@ -131,13 +138,14 @@ module Control
 						# Load UDP device here
 						#	Create UDP base
 						#	Add device to server
+						# => TODO::test!!
 						#	Call connected
 						#
 						devBase = DatagramBase.new
 						$datagramServer.add_device(controllerDevice, devBase)
 					end
 					
-					@@devices[baselookup] = Modules.loading	# set in device_connection
+					#@@devices[baselookup] = Modules.loading	# set in device_connection (see todo above)
 				}
 				
 				if @instance.respond_to?(:on_load)
@@ -163,6 +171,107 @@ module Control
 				@instance = @@devices[baselookup]
 				@@lookup[@instance] << @device
 				@@instances[@device] = @instance
+				EM.defer do
+					@instance.join_system(@system)
+				end
+			end
+		end
+	end
+	
+	
+	class ServiceModule
+		@@instances = {}	# db id => @instance
+		@@dbentry = {}		# db id => db instance
+		@@services = {}		# uri => @instance
+		@@lookup = {}		# @instance => db id array
+		@@lookup_lock = Mutex.new
+		
+		def initialize(system, controllerService)
+			@@lookup_lock.synchronize {
+				if @@instances[controllerService.id].nil?
+					@system = system
+					@service = controllerService.id
+					@@dbentry[controllerService.id] = controllerService
+					instantiate_module(controllerService)
+				end
+			}
+		end
+		
+		
+		def unload	# should never be called on the reactor thread so no need to defer
+			
+			@instance.base.shutdown(@system)
+			
+			@@lookup_lock.synchronize {
+				db = @@lookup[@instance].delete(@service)
+				@@instances.delete(db)
+				db = @@dbentry.delete(db)
+				
+				if @@lookup[@instance].empty?
+					@@lookup.delete(@instance)
+					@@services.delete(db.uri)
+				end
+			}
+		end
+		
+
+		def self.lookup(instance)
+			@@lookup_lock.synchronize {
+				return @@dbentry[@@lookup[instance][0]]
+			}
+		end
+		
+		def self.instance_of(db_id)
+			@@lookup_lock.synchronize {
+				return @@instances[db_id]
+			}
+		end
+		
+		
+		attr_reader :instance
+		
+		
+		protected
+	
+	
+		def instantiate_module(controllerService)
+			if Modules[controllerService.dependency_id].nil?
+				Modules.load_module(controllerService.dependency)		# This is the re-load code function (live bug fixing - removing functions does not work)
+			end
+			
+			
+			if @@services[baselookup].nil?
+				
+				#
+				# Instance of a user module
+				#
+				@instance = Modules[controllerService.dependency_id].new
+				@instance.join_system(@system)
+				@@instances[@service] = @instance
+				@@services[controllerService.uri] = @instance
+				@@lookup[@instance] = [@service]
+				
+				
+				HttpService.new(@instance, controllerService)
+				
+				
+				if @instance.respond_to?(:on_load)
+					begin
+						@instance.on_load
+					rescue => e
+						Control.print_error(System.logger, e, {
+							:message => "service module #{@instance.class} error whilst calling: on_load",
+							:level => Logger::ERROR
+						})
+					end
+				end
+			else
+				#
+				# add parent may lock at this point!
+				#
+				@instance = @@services[controllerService.uri]
+				@@lookup[@instance] << @service
+				@@instances[@service] = @instance
 				EM.defer do
 					@instance.join_system(@system)
 				end

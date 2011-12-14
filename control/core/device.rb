@@ -1,26 +1,10 @@
 
 module Control
-	class Device
+	module ModuleCore
 		include Status	# The observable pattern (Should not be called directly)
 		include Constants
 		include Utilities
 		
-		def initialize(tls, makebreak)
-			@systems = []
-
-			#
-			# Status variables
-			#	NOTE:: if changed then change in logic.rb 
-			#
-			@secure_connection = tls
-			@makebreak_connection = makebreak
-			@status = {}
-			@status_lock = Mutex.new
-			@system_lock = Mutex.new
-			@status_emit = {}	# status => condition_variable
-			@status_waiting = false
-		end
-
 		#
 		# Sets up a link for the user code to the eventmachine class
 		#	This way the namespace is clean.
@@ -66,14 +50,9 @@ module Control
 			System.logger
 		end
 		
-
-		#
-		# required by base for send logic
-		#
-		attr_reader :secure_connection
-		attr_reader :makebreak_connection
 		attr_reader :systems
 		attr_reader :base
+		
 		
 		def mark_emit_start(status)
 			@status_lock.synchronize {
@@ -106,7 +85,7 @@ module Control
 			}
 		end
 		
-
+		
 		protected
 		
 		
@@ -135,14 +114,47 @@ module Control
 			
 			return nil
 		end
+	end
+	
+	class Device
+		include ModuleCore
+		
+		def initialize(tls, makebreak)
+			@systems = []
 
-		def send(data, options = {})
+			#
+			# Status variables
+			#	NOTE:: if changed then change in logic.rb 
+			#
+			@secure_connection = tls
+			@makebreak_connection = makebreak
+			@status = {}
+			@status_lock = Mutex.new
+			@system_lock = Mutex.new
+			@status_emit = {}	# status => condition_variable
+			@status_waiting = false
+		end
+
+		
+		
+
+		#
+		# required by base for send logic
+		#
+		attr_reader :secure_connection
+		attr_reader :makebreak_connection
+		
+
+		protected
+		
+
+		def send(data, options = {}, *args, &block)
 			if options[:emit].present?
 				logger.debug "Emit set: #{options[:emit]}"
 				@status_lock.lock
 			end
 			
-			error = @base.do_send_command(data, options)
+			error = @base.do_send_command(data, options, *args, &block)
 			
 			if options[:emit].present?
 				begin

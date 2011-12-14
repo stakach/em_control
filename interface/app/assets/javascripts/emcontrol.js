@@ -288,11 +288,8 @@ var acaControl = {
 				oneKey = getCookie('next_key');
 				if(!!oneKey){
 					send("authenticate", oneKey);
-				} else {
-					send("authenticate", 'failed');
+					return false;
 				}
-				
-				return false;
 			}
 		});
 		

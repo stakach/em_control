@@ -3,7 +3,7 @@ RailsAdmin.config do |config|
   config.current_user_method { current_rake db:migrate } #auto-generated
 	
 	
-	config.included_models = ['User', 'Group', 'AuthSource', 'Zone', 'TrustedDevice', 'Dependency', 'Setting', 'ControlSystem', 'ControllerLogic', 'ControllerDevice', 'Server']
+	config.included_models = ['User', 'Group', 'AuthSource', 'Zone', 'TrustedDevice', 'Dependency', 'Setting', 'ControlSystem', 'ControllerLogic', 'ControllerDevice', 'ControllerHttpService', 'Server']
 	config.label_methods << :identifier << :hostname
 	
 	
@@ -310,6 +310,7 @@ RailsAdmin.config do |config|
 			field :port
 			field :tls
 			field :udp
+			field :makebreak
 		end
 		
 		group :device_configuration do
@@ -318,6 +319,7 @@ RailsAdmin.config do |config|
 			field :port
 			field :tls
 			field :udp
+			field :makebreak
 		end
 		
 		group :device_location do
@@ -332,8 +334,23 @@ RailsAdmin.config do |config|
 	end
 	
 	
-	config.model ControllerLogic do
+	config.model ControllerHttpService do
 		weight 14
+		
+		object_label_method do
+			:dev_label_method
+		end	
+		
+		field :control_system
+		field :dependency
+		field :custom_name
+		field :priority
+		field :uri
+	end
+	
+	
+	config.model ControllerLogic do
+		weight 15
 		
 		object_label_method do
 			:dev_label_method
@@ -346,7 +363,7 @@ RailsAdmin.config do |config|
 	end
 	
 	config.model Setting do
-		weight 15
+		weight 16
 		
 		field :object
 		
@@ -370,7 +387,7 @@ RailsAdmin.config do |config|
 	
 	
 	config.model TrustedDevice do
-		weight 16
+		weight 17
 		
 		object_label_method do
 			:trust_label_method

@@ -159,12 +159,15 @@ module Control
 			begin
 				if @connection.nil?
 					@connection = EventMachine::HttpRequest.new(@uri, @config)
+					#
+					# TODO:: allow for a block to be passed in too
+					#
 					if @parent.respond_to?(:use_middleware)
 						@parent.use_middleware(@connection)
 					end
 				end
 				
-				if command[:custom_client].nil?
+#				if command[:custom_client].nil?
 					http = @connection.__send__(command[:verb], command)
 =begin				else
 					http = @connection.__send__(command[:verb], command) do |*args|
@@ -186,7 +189,7 @@ module Control
 							raise e	# continue propagation
 						end
 =end					end
-				end
+#				end
 				
 				@last_sent_at = Time.now.to_f
 				
@@ -379,7 +382,7 @@ module Control
 		#
 		# Processes sends in strict order
 		#
-		def do_send_command(path, options = {}, *args, &block)
+		def do_send_request(path, options = {}, *args, &block)
 			
 			begin
 				@status_lock.synchronize {

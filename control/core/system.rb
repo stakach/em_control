@@ -154,6 +154,10 @@ module Control
 					@controller.devices.includes(:dependency).each do |device|
 						load_hooks(device, DeviceModule.new(self, device))
 					end
+					
+					@controller.services.includes(:dependency).each do |service|
+						load_hooks(service, ServiceModule.new(self, service))
+					end
 				
 					@controller.logics.includes(:dependency).each do |logic|
 						load_hooks(logic, LogicModule.new(self, logic))

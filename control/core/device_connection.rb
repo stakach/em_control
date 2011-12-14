@@ -92,7 +92,7 @@ module Control
 			# Configure links between objects (This is a very loose tie)
 			#	Relies on serial loading of modules
 			#
-			@parent = Modules.loading[0]
+			@parent = Modules.loading
 			@parent.setbase(self)
 			
 			@tls_enabled = @parent.secure_connection
