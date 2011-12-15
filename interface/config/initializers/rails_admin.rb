@@ -253,6 +253,7 @@ RailsAdmin.config do |config|
 			field :filename
 			field :description
 			field :default_port
+			field :default_uri
 		end
 	end
 	

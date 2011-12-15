@@ -58,9 +58,9 @@ module Control
 					@system = system
 					@device = controllerDevice.id
 					@@dbentry[controllerDevice.id] = controllerDevice
-					instantiate_module(controllerDevice)
 				end
 			}
+			instantiate_module(controllerDevice)
 		end
 		
 		
@@ -107,10 +107,12 @@ module Control
 		def instantiate_module(controllerDevice)
 			if Modules[controllerDevice.dependency_id].nil?
 				Modules.load_module(controllerDevice.dependency)		# This is the re-load code function (live bug fixing - removing functions does not work)
-			end			
+			end
 			
 			
 			baselookup = "#{controllerDevice.ip}:#{controllerDevice.port}:#{controllerDevice.udp}"
+			
+			@@lookup_lock.lock
 			if @@devices[baselookup].nil?
 				
 				#
@@ -121,7 +123,9 @@ module Control
 				@@instances[@device] = @instance
 				@@devices[baselookup] = @instance
 				@@lookup[@instance] = [@device]
-			
+				@@lookup_lock.unlock	#UNLOCK!! so we can lookup settings in on_load
+				
+				
 				devBase = nil
 				Modules.load_lock.synchronize {
 					Modules.loading = @instance
@@ -156,6 +160,8 @@ module Control
 							:message => "device module #{@instance.class} error whilst calling: on_load",
 							:level => Logger::ERROR
 						})
+					ensure
+						ActiveRecord::Base.clear_active_connections!
 					end
 				end
 				
@@ -174,6 +180,7 @@ module Control
 				EM.defer do
 					@instance.join_system(@system)
 				end
+				@@lookup_lock.unlock	#UNLOCK!!
 			end
 		end
 	end
@@ -192,9 +199,9 @@ module Control
 					@system = system
 					@service = controllerService.id
 					@@dbentry[controllerService.id] = controllerService
-					instantiate_module(controllerService)
 				end
 			}
+			instantiate_module(controllerService)
 		end
 		
 		
@@ -239,8 +246,8 @@ module Control
 				Modules.load_module(controllerService.dependency)		# This is the re-load code function (live bug fixing - removing functions does not work)
 			end
 			
-			
-			if @@services[baselookup].nil?
+			@@lookup_lock.lock
+			if @@services[controllerService.uri].nil?
 				
 				#
 				# Instance of a user module
@@ -250,7 +257,7 @@ module Control
 				@@instances[@service] = @instance
 				@@services[controllerService.uri] = @instance
 				@@lookup[@instance] = [@service]
-				
+				@@lookup_lock.unlock #UNLOCK
 				
 				HttpService.new(@instance, controllerService)
 				
@@ -263,6 +270,8 @@ module Control
 							:message => "service module #{@instance.class} error whilst calling: on_load",
 							:level => Logger::ERROR
 						})
+					ensure
+						ActiveRecord::Base.clear_active_connections!
 					end
 				end
 			else
@@ -275,6 +284,7 @@ module Control
 				EM.defer do
 					@instance.join_system(@system)
 				end
+				@@lookup_lock.unlock #UNLOCK
 			end
 		end
 	end
@@ -300,6 +310,8 @@ module Control
 						:message => "logic module #{@instance.class} error whilst calling: on_load",
 						:level => Logger::ERROR
 					})
+				ensure
+					ActiveRecord::Base.clear_active_connections!
 				end
 			end
 		end
@@ -313,6 +325,8 @@ module Control
 						:message => "logic module #{@instance.class} error whilst calling: on_unload",
 						:level => Logger::ERROR
 					})
+				ensure
+					ActiveRecord::Base.clear_active_connections!
 				end
 			end
 			

@@ -54,6 +54,7 @@ GEM
     activesupport (3.1.1)
       multi_json (~> 1.0)
     addressable (2.2.6)
+    algorithms (0.3.0)
     ansi (1.4.1)
     arel (2.2.1)
     bcrypt-ruby (3.0.1-x86-mingw32)
@@ -67,6 +68,16 @@ GEM
       coffee-script-source
       execjs
     coffee-script-source (1.1.3)
+    em-http-request (1.0.0)
+      addressable (>= 2.2.3)
+      em-socksify
+      eventmachine (>= 1.0.0.beta.3)
+      http_parser.rb (>= 0.5.2)
+    em-priority-queue (1.0.0)
+      algorithms (~> 0.3.0)
+      eventmachine (>= 1.0.0.beta.3)
+    em-socksify (0.1.0)
+      eventmachine
     em-websocket (0.3.5)
       addressable (>= 2.1.1)
       eventmachine (>= 0.12.9)
@@ -77,6 +88,7 @@ GEM
       multi_json (~> 1.0)
     haml (3.1.3)
     hike (1.2.1)
+    http_parser.rb (0.5.3-x86-mingw32)
     i18n (0.6.0)
     jquery-rails (1.0.17)
       railties (~> 3.0)
@@ -124,6 +136,7 @@ GEM
       sass (>= 3.1.4)
       sprockets (~> 2.0.0)
       tilt (~> 1.3.2)
+    simple_oauth (0.1.5)
     sprockets (2.0.3)
       hike (~> 1.2)
       rack (~> 1.0)
@@ -139,13 +152,17 @@ GEM
     uglifier (1.0.3)
       execjs (>= 0.3.0)
       multi_json (>= 1.0.2)
+    yajl-ruby (1.1.0-x86-mingw32)
 
 PLATFORMS
   x86-mingw32
 
 DEPENDENCIES
+  algorithms
   bcrypt-ruby
   coffee-rails (~> 3.1.1)
+  em-http-request
+  em-priority-queue (~> 1.0.0)
   em-websocket
   eventmachine (~> 1.0.0.beta)
   jquery-rails
@@ -155,5 +172,7 @@ DEPENDENCIES
   rails (= 3.1.1)
   rails_admin!
   sass-rails (~> 3.1.4)
+  simple_oauth
   turn
   uglifier (= 1.0.3)
+  yajl-ruby

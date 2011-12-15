@@ -1,6 +1,21 @@
+require 'em-http/middleware/oauth'
+require 'em-http/middleware/json_response'
+
+class HttpDebugInspector
+	
+	def request(client, head, body)
+		Control::System.logger.debug "HTTP #{client.req.method} #{client.req.uri} #{head.inspect}:#{body.inspect}"
+		[head,body]
+	end
+	
+end
+
+
 class TwitterMonitor < Control::Service
+	MAX_WAIT = 240
 
 	def on_load
+		@failures = 0
 		start_streaming
 	end
 	
@@ -15,13 +30,14 @@ class TwitterMonitor < Control::Service
 	def use_middleware(connection)
 		connection.use EventMachine::Middleware::JSONResponse
 		connection.use EventMachine::Middleware::OAuth, @oauth_config
+		connection.use HttpDebugInspector if logger.debug?
 	end
 	
 	#
 	# Twitter data recieved
 	#
-	def recieved(chunk, command)
-		logger.info chunk.inspect
+	def received(chunk, command)
+		logger.info "Twitter returned #{chunk.inspect}"
 	end
 	
 	
@@ -35,16 +51,42 @@ class TwitterMonitor < Control::Service
 			:access_token			=> setting(:access_token),
 			:access_token_secret	=> setting(:access_token_secret)
 		}
+		@follow = JSON.parse(setting(:follow))
+		
+		logger.debug "Twitter settings:"
+		logger.debug "-- following: #{@follow.inspect}"
+		logger.debug "-- config: #{@oauth_config.inspect}"
 	end
 	
 	
 	def start_streaming
 		load_config
 		request('/1/statuses/filter.json', {
+			:verb => :post,
 			:stream => true,
-			:stream_closed => proc {
-				start_streaming
-			}
+			:keepalive => false,
+			:stream_closed => proc { |http|
+				logger.info "Twitter connection failed: #{http.error}"
+				@failures += 1
+				if @failures > 1
+					wait = 20 * (@failures - 1)
+					if wait > MAX_WAIT
+						wait = MAX_WAIT
+					end
+					one_shot wait do
+						start_streaming
+					end
+				else
+					start_streaming
+				end
+			},
+			:headers => proc { |headers|
+				@failures = 0
+				logger.info "Twitter returned #{headers.inspect}"
+			},
+			:connect_timeout => 5,
+			:inactivity_timeout => 90,
+			:body => {:follow => @follow.join(",")}
 		})
 	end
 end

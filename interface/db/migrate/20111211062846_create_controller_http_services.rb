@@ -12,5 +12,7 @@ class CreateControllerHttpServices < ActiveRecord::Migration
 			
 			t.timestamps
 		end
+		
+		add_column		:dependencies, :default_uri, :string
 	end
 end

@@ -598,6 +598,7 @@ module Control
 							end
 						end
 					end
+					ActiveRecord::Base.clear_active_connections!
 				end
 			}
 		end
@@ -648,6 +649,7 @@ module Control
 						})
 					ensure
 						@parent.clear_active_timers
+						ActiveRecord::Base.clear_active_connections!
 					end
 				end
 			end

@@ -91,11 +91,7 @@ module Control
 		
 		#
 		# Configuration and settings
-		#
-		def config
-			DeviceModule.lookup(self)
-		end
-		
+		#		
 		def setting(name)
 			val = config.settings.where("name = ?", name.to_s).first || config.dependency.settings.where("name = ?", name.to_s).first
 			
@@ -146,6 +142,11 @@ module Control
 		
 
 		protected
+		
+		
+		def config
+			DeviceModule.lookup(self)
+		end
 		
 
 		def send(data, options = {}, *args, &block)

@@ -21,8 +21,7 @@ module Control
 				# :bind
 				# :proxy
 			}
-			@uri = URI.parse(settings.ip)
-			@uri.port = settings.port
+			@uri = URI.parse(settings.uri)
 			@config[:ssl] = parent.certificates if parent.respond_to?(:certificates)
 			#@connection = EventMachine::HttpRequest.new(@uri, @config)
 			
@@ -49,9 +48,10 @@ module Control
 				:verb => :get,
 				:stream => false,		# send chunked data
 				#:stream_closed => block
+				#:headers
 				
-				:callback => nil,		# Alternative to the recieved function
-				:errback => nil,
+				#:callback => nil,		# Alternative to the recieved function
+				#:errback => nil,
 			}
 			
 			
@@ -60,7 +60,7 @@ module Control
 			#
 			@task_queue = Queue.new			# basically we add tasks here that we want to run in a strict order
 			@wait_queue = EM::Queue.new
-			@send_queue = PriorityQueue.new	# regular priority
+			@send_queue = EM::PriorityQueue.new(:fifo => true) {|x,y| x < y}	# regular priority
 			
 			
 			#
@@ -209,7 +209,12 @@ module Control
 						#
 						# streaming has finished
 						#
-						on_stream_close(command)
+						if logger.debug?
+							EM.defer do
+								logger.debug "Stream closed by remote"
+							end
+						end
+						on_stream_close(http, command)
 						if command[:wait]
 							process_next_send
 						end
@@ -217,6 +222,16 @@ module Control
 				else
 					http.callback {
 						process_response(http, command)
+					}
+				end
+				
+				if command[:headers].present?
+					http.headers { |hash|
+						EM.defer {
+							@task_queue.push lambda {
+								command[:headers].call(hash)
+							}
+						}
 					}
 				end
 				
@@ -232,14 +247,24 @@ module Control
 								logger.info "A response was not recieved for the command: #{command[:path]}"
 							end
 						else
-							on_stream_close(command)
+							if logger.debug?
+								EM.defer do
+									logger.debug "Stream connection dropped"
+								end
+							end
+							on_stream_close(http, command)
 							process_next_send
 						end
 					end
 				elsif command[:stream]
 					http.errback do
 						@connection = nil
-						on_stream_close(command)
+						if logger.debug?
+							EM.defer do
+								logger.debug "Stream connection dropped"
+							end
+						end
+						on_stream_close(http, command)
 					end
 					process_next_send
 				else
@@ -262,6 +287,7 @@ module Control
 				process_next_send
 			ensure
 				@connection = nil unless command[:keepalive]
+				ActiveRecord::Base.clear_active_connections!
 			end
 		end
 		
@@ -271,11 +297,11 @@ module Control
 			end
 		end
 		
-		def on_stream_close(command)
+		def on_stream_close(http, command)
 			if command[:stream_closed].present?
 				EM.defer {
 					begin
-						command[:stream_closed].call(command)
+						command[:stream_closed].call(http, command)
 					rescue => e
 						#
 						# save from bad user code (don't want to deplete thread pool)
@@ -285,6 +311,8 @@ module Control
 							:message => "module #{@parent.class} error whilst calling: stream closed",
 							:level => Logger::ERROR
 						})
+					ensure
+						ActiveRecord::Base.clear_active_connections!
 					end
 				}
 			end
@@ -296,47 +324,47 @@ module Control
 		#
 		def process_response(response, command)
 			EM.defer do
-				do_process_response(response, command)
+				@recieved_lock.synchronize { 	# This lock protects the send queue lock when we are emiting status
+					@send_monitor.mon_synchronize {
+						do_process_response(response, command)
+					}
+				}
 			end
 		end
 		
 		def do_process_response(response, command)
 			return if @shutting_down.value
 			
-			@recieved_lock.synchronize { 	# This lock protects the send queue lock when we are emiting status
-				@send_queue.mon_synchronize {
-					result = :abort
-					begin
-						@parent.mark_emit_start(command[:emit]) if command[:emit].present?
-						
-						if command[:callback].present?
-							result = command[:callback].call(response, command)
-						elsif @parent.respond_to?(:received)
-							result = @parent.received(response, command)
-						else
-							result = true
-						end
-					rescue => e
-						#
-						# save from bad user code (don't want to deplete thread pool)
-						#	This error should be logged in some consistent manner
-						#
-						Control.print_error(logger, e, {
-							:message => "module #{@parent.class} error whilst calling: received",
-							:level => Logger::ERROR
-						})
-					ensure
-						@parent.mark_emit_end(command[:emit]) if command[:emit].present?
-						ActiveRecord::Base.clear_active_connections!
-					end
-					
-					if command[:wait]
-						EM.schedule do
-							process_result(result, command)
-						end
-					end
-				}
-			}
+			result = :abort
+			begin
+				@parent.mark_emit_start(command[:emit]) if command[:emit].present?
+				
+				if command[:callback].present?
+					result = command[:callback].call(response, command)
+				elsif @parent.respond_to?(:received)
+					result = @parent.received(response, command)
+				else
+					result = true
+				end
+			rescue => e
+				#
+				# save from bad user code (don't want to deplete thread pool)
+				#	This error should be logged in some consistent manner
+				#
+				Control.print_error(logger, e, {
+					:message => "module #{@parent.class} error whilst calling: received",
+					:level => Logger::ERROR
+				})
+			ensure
+				@parent.mark_emit_end(command[:emit]) if command[:emit].present?
+				ActiveRecord::Base.clear_active_connections!
+			end
+			
+			if command[:wait]
+				EM.schedule do
+					process_result(result, command)
+				end
+			end
 		end
 		
 		
@@ -386,7 +414,7 @@ module Control
 			
 			begin
 				@status_lock.synchronize {
-					options = @default_send_options.merge(options)
+					options = @default_request_options.merge(options)
 				}
 				options[:path] = path unless path.nil?
 				options[:retries] = 0 if options[:wait] == false
@@ -440,14 +468,14 @@ module Control
 		
 		def default_send_options= (options)
 			@status_lock.synchronize {
-				@default_send_options.merge!(options)
+				@default_request_options.merge!(options)
 			}
 		end
 		
 		def config= (options)
 			EM.schedule do
 				@config.merge!(options)
-				@connection = EventMachine::HttpRequest.new(@uri, @config)
+				@connection = nil
 			end
 		end
 		

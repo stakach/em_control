@@ -19,6 +19,10 @@ module Control
 		
 		protected
 		
+		def config
+			ServiceModule.lookup(self)
+		end
+		
 		def request(path, options = {}, *args, &block)
 			
 			if options[:emit].present?
@@ -26,7 +30,7 @@ module Control
 				@status_lock.lock
 			end
 			
-			error = @base.do_send_request(data, options, *args, &block)
+			error = @base.do_send_request(path, options, *args, &block)
 			
 			if options[:emit].present?
 				begin

@@ -12,6 +12,11 @@ gem 'bcrypt-ruby'
 gem 'pg'
 gem 'eventmachine', "~>1.0.0.beta" 
 gem 'em-websocket'
+gem 'algorithms'
+gem 'em-priority-queue', "~> 1.0.0"
+gem 'em-http-request'
+gem 'simple_oauth'
+gem 'yajl-ruby'
 
 
 #

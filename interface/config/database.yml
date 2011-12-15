@@ -28,6 +28,6 @@ production:
   encoding: utf8
   template: template0
   database: control
-  pool: 5
+  pool: 30
   username: rails
   password: devpassword
