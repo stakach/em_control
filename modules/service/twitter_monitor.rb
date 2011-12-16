@@ -1,15 +1,3 @@
-require 'em-http/middleware/oauth'
-require 'em-http/middleware/json_response'
-
-class HttpDebugInspector
-	
-	def request(client, head, body)
-		Control::System.logger.debug "HTTP #{client.req.method} #{client.req.uri} #{head.inspect}:#{body.inspect}"
-		[head,body]
-	end
-	
-end
-
 
 class TwitterMonitor < Control::Service
 	MAX_WAIT = 240

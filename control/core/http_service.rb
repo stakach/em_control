@@ -1,5 +1,23 @@
 require 'uri'
 
+
+
+#
+# Include by default (keep it simple for developers) 
+#
+require 'em-http/middleware/oauth'
+require 'em-http/middleware/json_response'
+
+
+class HttpDebugInspector
+	
+	def request(client, head, body)
+		Control::System.logger.debug "HTTP #{client.req.method} #{client.req.uri} #{head.inspect}:#{body.inspect}"
+		[head,body]
+	end
+	
+end
+
 #
 # This contains the basic constructs required for
 #	serialised comms over TCP and UDP
@@ -41,8 +59,8 @@ module Control
 				# custom_client => block
 				:path => '/',
 				#file => path to file for streaming
-				:timeout => 10,			# inactivity_timeout in seconds
-				:connect_timeout => 5,
+				#query
+				#
 				:keepalive => true,
 				:redirects => 0,
 				:verb => :get,
@@ -466,7 +484,7 @@ module Control
 		
 		
 		
-		def default_send_options= (options)
+		def default_request_options= (options)
 			@status_lock.synchronize {
 				@default_request_options.merge!(options)
 			}
