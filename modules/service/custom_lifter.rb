@@ -18,6 +18,15 @@ class CustomLifter < Control::Service
 	def on_unload
 		
 	end
+
+
+	#
+	# Assign a connection middle ware
+	#
+	def use_middleware(connection)
+		#connection.use EventMachine::Middleware::JSONResponse
+		connection.use HttpDebugInspector if logger.debug?
+	end
 	
 	
 	#
@@ -62,9 +71,10 @@ class CustomLifter < Control::Service
 	def received(http, request)
 		data = http.response
 		
-		logger.debug "Lifter sent: #{data}"
+		logger.debug "Lifter sent: #{data.inspect}"
+		return :success
 		
-		if data =~ /ok!|fail!/i
+=begin		if data =~ /ok!|fail!/i
 			if data =~ /fail!/i
 				@fail_count += 1
 				if @fail_count >= 3
@@ -79,6 +89,6 @@ class CustomLifter < Control::Service
 			end
 		else
 			return :failed
-		end
+=end		end
 	end
 end

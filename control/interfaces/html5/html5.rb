@@ -188,7 +188,7 @@ class HTML5Monitor
 				if command.length == 2
 					@system.send_command(command[0], command[1], *data[:data])
 				else
-					Control::System.logger.info "-- in html5.rb, recieve : invalid command recieved - #{data[:command]} --"
+					Control::System.logger.info "-- in html5.rb, recieve : invalid command received - #{data[:command]} --"
 				end
 			end
 		}
@@ -281,7 +281,7 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
 				end
 			else
 				EM.defer do
-					Control::System.logger.info "in html5.rb, onerror : invalid handshake recieved - #{error.inspect}"
+					Control::System.logger.info "in html5.rb, onerror : invalid handshake received - #{error.inspect}"
 				end
 			end
 		}

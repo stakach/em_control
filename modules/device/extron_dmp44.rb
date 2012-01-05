@@ -1,4 +1,4 @@
-# :title:Extron DSP
+# :title:Extron DSP 44
 #
 # Status information avaliable:
 # -----------------------------
@@ -10,16 +10,9 @@
 #
 #
 #
-# Volume outputs
-# 60000 == volume 1
-# 60003 == volume 4
-#
-# Pre-mix gain inputs
-# 40100 == Mic1
-# 40105 == Mic6
 #
 
-class ExtronDmp64 < Control::Device
+class ExtronDmp44 < Control::Device
 
 	def on_load
 		#
@@ -36,11 +29,14 @@ class ExtronDmp64 < Control::Device
 		base.config = {
 			:clear_queue_on_disconnect => true	# Clear the queue as we may need to send login
 		}
-		@poll_lock = Mutex.new
 	end
 
 	def connected
-		
+		device_ready
+		@polling_timer = periodic_timer(120) do
+			logger.debug "-- Extron Maintaining Connection"
+			send('Q', :priority => 99)	# Low priority poll to maintain connection
+		end
 	end
 	
 	def disconnected
@@ -48,9 +44,7 @@ class ExtronDmp64 < Control::Device
 		# Disconnected may be called without calling connected
 		#	Hence the check if timer is nil here
 		#
-		@poll_lock.synchronize {
-			@polling_timer.cancel unless @polling_timer.nil?
-		}
+		@polling_timer.cancel unless @polling_timer.nil?
 	end
 	
 	
@@ -65,31 +59,35 @@ class ExtronDmp64 < Control::Device
 	#
 	# Input control
 	#
-	def adjust_gain(mic, value)	# \e == 0x1B == ESC key
-		do_send("\eG4010#{mic}*#{value}AU")
-		# Response: DsG4010#{mic}*#{value}
+	def adjust_gain(input, value)	# \e == 0x1B == ESC key
+		input -= 1
+		do_send("\eG3000#{input}*#{value}AU")
+		# Response: DsG3000#{input}*#{value}
 	end
 
-	def adjust_gain_relative(mic, value)	# \e == 0x1B == ESC key
-		current = do_send("\eG4010#{mic}AU", :emit => "mic#{mic}_gain")
-		do_send("\eG4010#{mic}*#{current + (value * 10)}AU")
+	def adjust_gain_relative(input, value)	# \e == 0x1B == ESC key
+		input -= 1
+		current = do_send("\eG3000#{input}AU", :emit => "mic#{input + 1}_gain")
+		do_send("\eG3000#{input}*#{current + (value * 10)}AU")
 		
-		# Response: DsG4010#{mic}*#{value}
+		# Response: DsG3000#{input}*#{value}
 	end
 	
-	def mute_mic(mic)
-		do_send("\eM4010#{mic}*1AU")
-		# Response: DsM4010#{mic}*1
+	def mute_input(input)
+		input -= 1
+		do_send("\eM3000#{input}*1AU")
+		# Response: DsM3000#{input}*1
 	end
 	
-	def unmute_mic(mic)
-		do_send("\eM4010#{mic}*0AU")
-		# Response: DsM4010#{mic}*0
+	def unmute_input(input)
+		input -= 1
+		do_send("\eM3000#{input}*0AU")
+		# Response: DsM3000#{input}*0
 	end
 	
 	
 	#
-	# Output control
+	# Group control
 	#
 	def mute_group(group)
 		do_send("\eD#{group}*1GRPM")
@@ -127,16 +125,9 @@ class ExtronDmp64 < Control::Device
 	# Then sends password prompt
 	#
 	def received(data, command)
-		logger.debug "Extron DSP sent #{data}"
+		logger.debug "Extron DSP 44 sent #{data}"
 		
 		if command.nil? && data =~ /Copyright/i
-			pass = setting(:password)
-			if pass.nil?
-				device_ready
-			else
-				do_send(pass)		# Password set
-			end
-		elsif data =~ /Login/i
 			device_ready
 		else
 			case data[0..2].to_sym
@@ -147,10 +138,10 @@ class ExtronDmp64 < Control::Device
 				else
 					self["ouput#{data[0][5..-1].to_i}_volume"] = data[1].to_i
 				end
-			when :DsG	# Mic gain
-				self["mic#{data[7]}_gain"] = data[9..-1].to_i
-			when :DsM	# Mic Mute
-				self["mic#{data[7]}_mute"] = data[-1] == '1'	# 1 == true
+			when :DsG	# Input gain
+				self["input#{data[7].to_i + 1}_gain"] = data[9..-1].to_i
+			when :DsM	# Input Mute
+				self["input#{data[7].to_i + 1}_mute"] = data[-1] == '1'	# 1 == true
 			when :Rpr	# Preset called
 				logger.debug "Extron DSP called preset #{data[3..-1]}"
 			else
@@ -172,7 +163,8 @@ class ExtronDmp64 < Control::Device
 	
 	
 	ERRORS = {
-		1 => 'Invalid input number (number is too large)',
+		10 => 'Invalid command',
+		11 => 'Invalid preset',
 		12 => 'Invalid port number',
 		13 => 'Invalid parameter (number is out of range)',
 		14 => 'Not valid for this configuration',
@@ -188,12 +180,6 @@ class ExtronDmp64 < Control::Device
 	
 	def device_ready
 		do_send("\e3CV")	# Verbose mode and tagged responses
-		@poll_lock.synchronize {
-			@polling_timer = periodic_timer(120) do
-				logger.debug "-- Extron Maintaining Connection"
-				send('Q', :priority => 99)	# Low priority poll to maintain connection
-			end
-		}
 	end
 
 

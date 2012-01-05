@@ -22,7 +22,7 @@ class TwitterMonitor < Control::Service
 	end
 	
 	#
-	# Twitter data recieved
+	# Twitter data received
 	#
 	def received(chunk, command)
 		logger.info "Twitter returned #{chunk.inspect}"

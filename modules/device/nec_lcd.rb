@@ -250,7 +250,7 @@ class NecLcd < Control::Device
 			return false
 		end
 		
-		#data = array_to_str(data)	# Convert bytes to a string (recieved like this)
+		#data = array_to_str(data)	# Convert bytes to a string (received like this)
 		
 		case MSG_TYPE[data[4]]	# Check the MSG_TYPE (B, D or F)
 			when :command_reply

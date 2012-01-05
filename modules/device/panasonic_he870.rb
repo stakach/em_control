@@ -10,19 +10,32 @@ class PanasonicHe870 < Control::Device
 		#
 		# Setup constants
 		#
-		self[:iris_min] = 0x555
-		self[:iris_max] = 0xFFF
-		self[:pan_left_limit] = 0x2D08		# CCW Limit (Counter Clockwise)
-		self[:pan_right_limit] = 0xD2F5		# CW Limit (Clockwise)
-		self[:tilt_up_limit] = 0x5556
-		self[:tilt_down_limit] = 0x8E38
-		self[:zoom_min] = 0x01
-		self[:zoom_max] = 0x999
-		self[:focus_near] = 0x555
-		self[:focus_far] = 0x999
+		self[:pan_ccw] = 0x2D08		# Counter Clock Wise
+		self[:pan_cw] = 0xD2F5
+		
+		self[:tilt_up] = 0x5556
+		self[:tilt_down] = 0x8E38
+		
+		self[:zoom_min] = 1
+		self[:zoom_max] = 999
+		
+		self[:focus_near] = 1
+		self[:focus_far] = 999
+		
+		self[:iris_close] = 1
+		self[:iris_open] = 999
+
+		self[:speed_max] = 49
+		self[:speed_min] = 1
+
+		self[:pan_speed] = 10
+		self[:tilt_speed] = 10
+		self[:focus_speed] = 10
+		self[:zoom_speed] = 10
 		
 		base.default_send_options = {
-			:max_waits => 10	# Panasonic camera controller sends alot of commands
+			:max_waits => 10,	# Panasonic camera controller sends alot of commands
+			:wait => false
 		}
 	end
 	
@@ -56,16 +69,16 @@ class PanasonicHe870 < Control::Device
 		command = "O"
 		
 		if [On, "on", :on].include?(state)
-			do_send(command, 0x01, :delay => 6)
+			do_send(command, 0x01, :delay => 6, :wait => true)
 			logger.debug "Camera, requested to power on"
 		else
-			do_send(command, 0x00)
+			do_send(command, 0x00, :wait => true)
 			logger.debug "Camera, requested to power off"
 		end
 	end
 
 	def power?
-		do_send('O', '', :emit => :power)
+		do_send('O', '', :emit => :power, :wait => true)
 	end
 	
 
@@ -79,73 +92,114 @@ class PanasonicHe870 < Control::Device
 			power On
 		end
 
-		do_send("R", input.to_s.rjust(2, '0'), :delay => 1)		
+		do_send("R", input.to_s.rjust(2, '0'), :delay => 1, :wait => true)		
 		logger.debug "Camera, requested to switch to: #{input + 1}"
 	end
 	
 	
 	def save_preset(number)
-		do_send('M', number - 1)
+		do_send('M', number - 1, :wait => true)
 		logger.debug "Camera, requested to save preset: #{number}"
 	end
 
 
-	def up
-		level = self[:tilt]
-		tilt(level - 1) if level > self[:tilt_up_limit]
+	def tilt_speed(speed)
+		self[:tilt_speed] = speed
 	end
 
-	def down
-		level = self[:tilt]
-		tilt(level + 1) if level < self[:tilt_down_limit]
+
+	def tilt_up(speed = self[:tilt_speed])
+		speed += 50
+		do_send('T', speed.to_s.rjust(2,'0'))
 	end
 
-	def left
-		level = self[:pan]
-		pan(level - 1) if level > self[:pan_left_limit]
+	def tilt_down(speed = self[:tilt_speed])
+		speed = 50 - speed
+		do_send('T', speed.to_s.rjust(2,'0'))
 	end
 
-	def right
-		level = self[:pan]
-		pan(level + 1) if level < self[:pan_right_limit]
+	def tilt_stop
+		do_send('T', 50)
+	end
+
+	def pan_speed(speed)
+		self[:pan_speed] = speed
+	end
+
+
+	#
+	# Must poll these
+	#
+	def pan_right(speed = self[:pan_speed])
+		speed += 50
+		do_send('P', speed.to_s.rjust(2,'0'))
+	end
+
+	def pan_left(speed = self[:pan_speed])
+		speed = 50 - speed
+		do_send('P', speed.to_s.rjust(2,'0'))
 	end
 	
-	def pan(level)
-		do_send('APC', "#{level.to_s(16).rjust(4, '0')}#{self[:tilt].to_s(16).rjust(4, '0')}")
-	end
-	
-	def tilt(level)
-		do_send('APC', "#{self[:pan].to_s(16).rjust(4, '0')}#{level.to_s(16).rjust(4, '0')}")
-	end
-	
-
-	def zoom_in
-		level = self[:zoom]
-		zoom(level + 1) if level < self[:zoom_max]
-	end
-
-	def zoom_out
-		level = self[:zoom]
-		zoom(level - 1) if level > self[:zoom_min]
-	end
-	
-	def zoom(level)
-		do_send('AYZ', "#{level.to_s(16).rjust(3, '0')}")
+	def pan_stop
+		do_send('P', 50)
 	end
 	
 	
-	def iris_open
-		level = self[:iris]
-		iris(level + 1) if level < self[:iris_max]
+	#
+	# Default == center
+	#
+	def pantilt(pan = 0x8000, tilt = 0x8000)
+		do_send('APC', "#{pan.to_s(16).rjust(4, '0')}#{tilt.to_s(16).rjust(4, '0')}", :wait => true)
+	end
+	
+	def pan(position)
+		pantilt(position, self[:tilt])
+	end
+	
+	def tilt(position)
+		pantilt(self[:pan], position)
+	end
+	
+	
+	LIMIT_CONTROLS = {
+		:up => 1,
+		:down => 2,
+		:left => 3,
+		:right => 4
+	}
+	def limit(direction, type = :set)
+		direction = direction.to_sym if direction.class == String
+		type = type == :set ? 1 : 0
+		do_send('LC', "#{LIMIT_CONTROLS[direction]}#{type}")
+	end
+	
+
+	def zoom_speed(speed)
+		self[:zoom_speed] = speed
 	end
 
-	def iris_close
-		level = self[:iris]
-		iris(level - 1) if level > self[:iris_min]
+	def zoom_in(speed = self[:zoom_speed])
+		speed += 50
+		do_send('Z', speed.to_s.rjust(2,'0'))
 	end
+
+	def zoom_out(speed = self[:zoom_speed])
+		speed = 50 - speed
+		do_send('Z', speed.to_s.rjust(2,'0'))
+	end
+
+	def zoom_stop
+		do_send('Z', 50)
+	end
+	
+	def zoom(position)
+		do_send('AYZ', position.to_s.rjust(3,'0'), :wait => true)
+	end
+	
+	
 	
 	def iris(level)
-		do_send('AXZ', "#{level.to_s(16).rjust(3, '0')}")
+		do_send('I', level.to_s.rjust(2,'0'))
 	end
 	
 	def iris_mode(mode)
@@ -156,19 +210,31 @@ class PanasonicHe870 < Control::Device
 		end
 	end
 	
-	
-	def focus_near
-		level = self[:focus]
-		focus(level - 1) if level > self[:focus_near]
+	def iris(position)
+		do_send('AYI', position.to_s.rjust(3,'0'), :wait => true)
 	end
 	
-	def focus_far
-		level = self[:focus]
-		focus(level + 1) if level < self[:focus_far]
+	
+	def focus_speed(speed)
+		self[:focus_speed] = speed
+	end
+
+	def focus_near(speed = self[:focus_speed])
+		speed += 50
+		do_send('F', speed.to_s.rjust(2,'0'))
 	end
 	
-	def focus(level)
-		do_send('AXF', "#{level.to_s(16).rjust(3, '0')}")
+	def focus_far(speed = self[:focus_speed])
+		speed = 50 - speed
+		do_send('F', speed.to_s.rjust(2,'0'))
+	end
+	
+	def focus_stop
+		do_send('F', 50)
+	end
+	
+	def focus(position)
+		do_send('AYF', position.to_s.rjust(3,'0'), :wait => true)
 	end
 	
 
@@ -266,17 +332,17 @@ class PanasonicHe870 < Control::Device
 	
 
 	def do_poll
-		logger.debug "Camera, polling"
+		#logger.debug "Camera, polling"
 		zoom_status
-		focus_status
-		iris_status
-		#pantilt_status
+		#focus_status
+		#iris_status
+		##pantilt_status
 		error_status
-		#power_status use GZ command - if response is '---' then power is off
+		##power_status use GZ command - if response is '---' then power is off
 	end
 
 
-	#private
+	private
 	
 	
 	ERRORS = {
@@ -316,7 +382,7 @@ class PanasonicHe870 < Control::Device
 				priority = args[0]
 			end
 			message = OPERATION_CODE[command]
-			do_send(message, '', {:priority => priority})	# Status polling is a low priority
+			do_send(message, '', {:priority => priority, :wait => true})	# Status polling is a low priority
 		end
 	end
 	

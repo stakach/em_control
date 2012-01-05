@@ -37,7 +37,7 @@ module Control
 				:delay_on_recieve => 0,	# Delay next send after a recieve by x.y seconds (only works when we are waiting for responses)
 				#:emit
 				:max_waits => 3,
-				:callback => nil,		# Alternative to the recieved function
+				:callback => nil,		# Alternative to the received function
 				:retries => 2,
 				:hex_string => false,
 				:timeout => 5,			# Timeout in seconds
@@ -66,7 +66,7 @@ module Control
 			#
 			# Locks
 			#
-			@recieved_lock = Mutex.new
+			@received_lock = Mutex.new
 			@task_lock = Mutex.new
 			@status_lock = Mutex.new
 			@send_monitor = Object.new.extend(MonitorMixin)
@@ -230,7 +230,7 @@ module Control
 		end
 		
 		#
-		# Data recieved
+		# Data received
 		#	Allow modules to set message delimiters for auto-buffering
 		#	Default max buffer length == 1mb (setting can be overwritten)
 		#	NOTE: The buffer cannot be defered otherwise there are concurrency issues 
@@ -295,7 +295,7 @@ module Control
 		def do_process_response(response, command)
 			return if @shutting_down.value
 			
-			@recieved_lock.synchronize { 	# This lock protects the send queue lock when we are emiting status
+			@received_lock.synchronize { 	# This lock protects the send queue lock when we are emiting status
 				@send_monitor.mon_synchronize {
 					result = :abort
 					begin
@@ -315,7 +315,7 @@ module Control
 									result = @parent.received(response, command)
 								end
 							else
-								#	logger.debug "Out of order response recieved for: #{@parent.class}"
+								#	logger.debug "Out of order response received for: #{@parent.class}"
 								result = @parent.received(response, nil)
 							end
 						else
@@ -366,7 +366,7 @@ module Control
 				
 				EM.defer do
 					logger.info "module #{@parent.class} timeout"
-					logger.info "A response was not recieved for the command: #{command}" unless command.nil?
+					logger.info "A response was not received for the command: #{command}" unless command.nil?
 				end
 			elsif !@connected && @command.present? && @command[:wait]
 				if @command[:retry_on_disconnect] || @make_break
@@ -452,7 +452,7 @@ module Control
 			@parent.logger
 		end
 		
-		def recieved_lock
+		def received_lock
 			@send_monitor		# for monitor use
 		end
 		
@@ -627,7 +627,7 @@ module Control
 				close_connection
 				
 				@wait_queue.push(:shutdown)
-				@send_queue.push(:shutdown)
+				@send_queue.push(:shutdown, -32768)
 				@task_queue.push(nil)
 				
 				EM.defer do

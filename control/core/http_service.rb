@@ -12,8 +12,12 @@ require 'em-http/middleware/json_response'
 class HttpDebugInspector
 	
 	def request(client, head, body)
-		Control::System.logger.debug "HTTP #{client.req.method} #{client.req.uri} #{head.inspect}:#{body.inspect}"
+		Control::System.logger.debug "HTTP request #{client.req.method} #{client.req.uri} #{head.inspect}:#{body.inspect}"
 		[head,body]
+	end
+
+	def response(resp)
+		Control::System.logger.debug "HTTP Response #{resp.response.inspect}"
 	end
 	
 end
@@ -68,7 +72,7 @@ module Control
 				#:stream_closed => block
 				#:headers
 				
-				#:callback => nil,		# Alternative to the recieved function
+				#:callback => nil,		# Alternative to the received function
 				#:errback => nil,
 			}
 			
@@ -84,7 +88,7 @@ module Control
 			#
 			# Locks
 			#
-			@recieved_lock = Mutex.new
+			@received_lock = Mutex.new
 			@task_lock = Mutex.new
 			@status_lock = Mutex.new
 			@send_monitor = Object.new.extend(MonitorMixin)
@@ -262,7 +266,7 @@ module Control
 							
 							EM.defer do
 								logger.info "module #{@parent.class} error: #{http.error}"
-								logger.info "A response was not recieved for the command: #{command[:path]}"
+								logger.info "A response was not received for the command: #{command[:path]}"
 							end
 						else
 							if logger.debug?
@@ -342,7 +346,7 @@ module Control
 		#
 		def process_response(response, command)
 			EM.defer do
-				@recieved_lock.synchronize { 	# This lock protects the send queue lock when we are emiting status
+				@received_lock.synchronize { 	# This lock protects the send queue lock when we are emiting status
 					@send_monitor.mon_synchronize {
 						do_process_response(response, command)
 					}
@@ -420,7 +424,7 @@ module Control
 			@parent.logger
 		end
 		
-		def recieved_lock
+		def received_lock
 			@send_monitor		# for monitor use
 		end
 		
@@ -503,7 +507,7 @@ module Control
 			if @parent.leave_system(system) == 0
 				@shutting_down.value = true
 				@wait_queue.push(:shutdown)
-				@send_queue.push(:shutdown)
+				@send_queue.push(:shutdown, -32768)
 				@task_queue.push(nil)
 				
 				EM.defer do

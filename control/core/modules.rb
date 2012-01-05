@@ -43,7 +43,7 @@ module Control
 
 	#
 	# TODO:: Consider allowing different dependancies use the same connection
-	# 	Means only the first will call recieved - others must use recieve blocks
+	# 	Means only the first will call received - others must use recieve blocks
 	#
 	class DeviceModule
 		@@instances = {}	# db id => @instance

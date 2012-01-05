@@ -54,38 +54,6 @@ module Control
 		attr_reader :base
 		
 		
-		def mark_emit_start(status)
-			@status_lock.synchronize {
-				if @status_emit.has_key?(status) && @status_emit[status].length > 0
-					@emit_has_occured = false
-				end
-			}
-		end
-		
-		def mark_emit_end(status)
-			@status_lock.synchronize {
-				if @status_emit.has_key?(status) && @status_emit[status].length > 0
-					if not @emit_has_occured
-						@emit_has_occured = true
-						@status_emit[status].shift.broadcast
-						logger.debug "A forced emit on #{status} occured"
-					end
-				end
-			}
-		end
-		
-		
-		def clear_emit_waits
-			@status_lock.synchronize {
-				@status_emit.each_value do |status|
-					while status.length > 0
-						status.shift.broadcast
-					end
-				end
-			}
-		end
-		
-		
 		protected
 		
 		
@@ -150,18 +118,20 @@ module Control
 		
 
 		def send(data, options = {}, *args, &block)
-			if options[:emit].present?
-				logger.debug "Emit set: #{options[:emit]}"
-				@status_lock.lock
-			end
-			
-			error = @base.do_send_command(data, options, *args, &block)
-			
-			if options[:emit].present?
-				begin
+			begin
+				if options[:emit].present?
+					logger.debug "Emit set: #{options[:emit]}"
+					@status_lock.lock
 					emit = options[:emit]
+					#emit = options.delete(:emit)
+				end
+			
+				error = @base.do_send_command(data, options, *args, &block)
+			
+				if emit.present?
+				
 					stat = @status[emit]
-					return stat if error == true
+					return stat if error == true  # TODO:: fix deadlock
 					
 					#
 					# The command is queued - we need to wait for the status to be emited
@@ -177,17 +147,30 @@ module Control
 					#	Ensures all commands that should be high priority are
 					#
 					begin
-						@base.recieved_lock.mon_exit
+						#
+						# Check for emit in received
+						#	TODO:: ensure early response sent else log the issue and return current value
+						#
+						@base.received_lock.mon_exit
 						@status_emit[emit].last.wait(@status_lock)	# wait for the emit to occur
-						@base.recieved_lock.mon_enter
+						@base.received_lock.mon_enter
 					rescue
 						@status_emit[emit].last.wait(@status_lock)	# wait for the emit to occur
 					end
 					
 					stat = @status[emit]
 					return stat
-				ensure
-					@status_lock.unlock
+				end
+
+			rescue => e
+				Control.print_error(logger, e, {
+					:message => "module #{self.class} in send",
+					:level => Logger::ERROR
+				})
+			ensure
+				begin
+					@status_lock.unlock if @status_lock.locked?
+				rescue
 				end
 			end
 		end

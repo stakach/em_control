@@ -134,9 +134,9 @@ class JvcMonitor < Control::Device
 	#
 	# LCD Response code
 	#
-	def received(data, command)		# Data is default recieved as a string
+	def received(data, command)		# Data is default received as a string
 		
-		#logger.debug "-- JVC LCD, recieved: #{data}"
+		#logger.debug "-- JVC LCD, received: #{data}"
 		:success
 	end
 

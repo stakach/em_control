@@ -231,9 +231,9 @@ class SharpLcd < Control::Device
 	#
 	# LCD Response code
 	#
-	def received(data, command)		# Data is default recieved as a string
+	def received(data, command)		# Data is default received as a string
 		
-		#logger.debug "-- Sharp LCD, recieved: #{data}"
+		#logger.debug "-- Sharp LCD, received: #{data}"
 		
 		value = nil
 		
@@ -274,6 +274,7 @@ class SharpLcd < Control::Device
 		else
 			value = data.to_i
 			command = command[:value_ret_only]
+			#logger.info "setting value ret: #{command}"
 		end
 		
 		case command

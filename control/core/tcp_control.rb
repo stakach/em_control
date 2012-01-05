@@ -7,9 +7,9 @@ module Control
 		# This is how sending works
 		#		Send recieves data, turns a mutex on and sends the data
 		#			-- It goes into the recieve mutex critical section and sleeps waiting for a response
-		#			-- a timeout is used as a backup in case no response is recieved
+		#			-- a timeout is used as a backup in case no response is received
 		#		The recieve function does the following
-		#			-- If the send lock is not active it processes the recieved data
+		#			-- If the send lock is not active it processes the received data
 		#			-- otherwise it notifies the send function that data is avaliable
 		#
 		class Base < EventMachine::Connection

@@ -38,10 +38,13 @@ class ExtronDxp < Control::Device
 		base.config = {
 			:clear_queue_on_disconnect => true	# Clear the queue as we may need to send login
 		}
-		@poll_lock = Mutex.new
 	end
 
 	def connected
+		@polling_timer = periodic_timer(120) do
+			logger.debug "-- Extron Maintaining Connection"
+			send('Q', :priority => 99)	# Low priority poll to maintain connection
+		end
 	end
 	
 	def disconnected
@@ -49,11 +52,13 @@ class ExtronDxp < Control::Device
 		# Disconnected may be called without calling connected
 		#	Hence the check if timer is nil here
 		#
-		@poll_lock.synchronize {
-			@polling_timer.cancel unless @polling_timer.nil?
-		}
+		@polling_timer.cancel unless @polling_timer.nil?
 	end
 	
+
+	def direct(string)
+		send(string, :wait => false)
+	end
 	
 	
 	#
@@ -61,6 +66,9 @@ class ExtronDxp < Control::Device
 	#
 	def switch(map)
 		map.each do |input, outputs|
+			input = input.to_s if input.class == Symbol
+			input = input.to_i if input.class == String
+
 			outputs = [outputs] unless outputs.class == Array
 			outputs.each do |output|
 				send("#{input}*#{output}!")
@@ -70,6 +78,9 @@ class ExtronDxp < Control::Device
 	
 	def switch_video(map)
 		map.each do |input, outputs|
+			input = input.to_s if input.class == Symbol
+			input = input.to_i if input.class == String
+
 			outputs = [outputs] unless outputs.class == Array
 			outputs.each do |output|
 				send("#{input}*#{output}%")
@@ -79,6 +90,9 @@ class ExtronDxp < Control::Device
 	
 	def switch_audio(map)
 		map.each do |input, outputs|
+			input = input.to_s if input.class == Symbol
+			input = input.to_i if input.class == String
+
 			outputs = [outputs] unless outputs.class == Array
 			outputs.each do |output|
 				send("#{input}*#{output}$")
@@ -121,6 +135,11 @@ class ExtronDxp < Control::Device
 	def recall_preset(number)
 		send("#{number}.")
 	end
+
+
+	#def response_delimiter
+	#	[0x0D, 0x0A]	# Used to interpret the end of a message
+	#end
 	
 	
 	#
@@ -197,12 +216,6 @@ class ExtronDxp < Control::Device
 	def device_ready
 		send("I", :wait => true, :command => :information)
 		do_send("\e3CV", :wait => true)	# Verbose mode and tagged responses
-		@poll_lock.synchronize {
-			@polling_timer = periodic_timer(120) do
-				logger.debug "-- Extron Maintaining Connection"
-				send('Q', :priority => 99)	# Low priority poll to maintain connection
-			end
-		}
 	end
 
 	def do_send(data, options = {})

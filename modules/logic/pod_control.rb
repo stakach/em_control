@@ -112,7 +112,7 @@ class PodControl < Control::Logic
 	
 	
 	def display_power_changed(on)
-		logger.debug "Pod Control: recieved power change status"
+		logger.debug "Pod Control: received power change status"
 		if !on	# revert to default values when display is next turned on
 			self[:set_default_laptop1] = true
 			self[:set_default_laptop2] = true

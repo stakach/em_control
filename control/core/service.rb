@@ -52,9 +52,9 @@ module Control
 					#	Ensures all commands that should be high priority are
 					#
 					begin
-						@base.recieved_lock.mon_exit
+						@base.received_lock.mon_exit
 						@status_emit[emit].last.wait(@status_lock)	# wait for the emit to occur
-						@base.recieved_lock.mon_enter
+						@base.received_lock.mon_enter
 					rescue
 						@status_emit[emit].last.wait(@status_lock)	# wait for the emit to occur
 					end
