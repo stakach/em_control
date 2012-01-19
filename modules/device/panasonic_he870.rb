@@ -16,14 +16,14 @@ class PanasonicHe870 < Control::Device
 		self[:tilt_up] = 0x5556
 		self[:tilt_down] = 0x8E38
 		
-		self[:zoom_min] = 1
-		self[:zoom_max] = 999
+		self[:zoom_min] = 0x555
+		self[:zoom_max] = 0xFFF
 		
-		self[:focus_near] = 1
-		self[:focus_far] = 999
+		self[:focus_near] = 0x555
+		self[:focus_far] = 0xFFF
 		
-		self[:iris_close] = 1
-		self[:iris_open] = 999
+		self[:iris_close] = 0x555
+		self[:iris_open] = 0xFFF
 
 		self[:speed_max] = 49
 		self[:speed_min] = 1
@@ -103,10 +103,12 @@ class PanasonicHe870 < Control::Device
 	end
 
 
+	#
+	# Must poll these
+	#
 	def tilt_speed(speed)
 		self[:tilt_speed] = speed
 	end
-
 
 	def tilt_up(speed = self[:tilt_speed])
 		speed += 50
@@ -121,15 +123,12 @@ class PanasonicHe870 < Control::Device
 	def tilt_stop
 		do_send('T', 50)
 	end
+	
 
 	def pan_speed(speed)
 		self[:pan_speed] = speed
 	end
 
-
-	#
-	# Must poll these
-	#
 	def pan_right(speed = self[:pan_speed])
 		speed += 50
 		do_send('P', speed.to_s.rjust(2,'0'))
@@ -193,7 +192,7 @@ class PanasonicHe870 < Control::Device
 	end
 	
 	def zoom(position)
-		do_send('AYZ', position.to_s.rjust(3,'0'), :wait => true)
+		do_send('AXZ', position.to_s(16), :wait => true)
 	end
 	
 	
@@ -211,7 +210,7 @@ class PanasonicHe870 < Control::Device
 	end
 	
 	def iris(position)
-		do_send('AYI', position.to_s.rjust(3,'0'), :wait => true)
+		do_send('AXI', position.to_s(16), :wait => true)
 	end
 	
 	
@@ -234,7 +233,7 @@ class PanasonicHe870 < Control::Device
 	end
 	
 	def focus(position)
-		do_send('AYF', position.to_s.rjust(3,'0'), :wait => true)
+		do_send('AXF', position.to_s(16), :wait => true)
 	end
 	
 
@@ -275,9 +274,9 @@ class PanasonicHe870 < Control::Device
 				
 				return :success if command.present? && command[:data][1..3] == 'APC'
 			when 'z'			# Zoom
-				self[:zoom] = (data[3..-1].to_i(16) - 0x554)
+				self[:zoom] = data[3..-1].to_i(16)
 				
-				return :success if command.present? && command[:data][1..3] == 'AYZ'
+				return :success if command.present? && command[:data][1..3] == 'AXZ'
 			when 'i'			# IRIS
 				self[:iris] = data[3..-1].to_i(16)
 				
@@ -334,9 +333,9 @@ class PanasonicHe870 < Control::Device
 	def do_poll
 		#logger.debug "Camera, polling"
 		zoom_status
-		#focus_status
-		#iris_status
-		##pantilt_status
+		focus_status
+		iris_status
+		pantilt_status
 		error_status
 		##power_status use GZ command - if response is '---' then power is off
 	end
@@ -367,6 +366,7 @@ class PanasonicHe870 < Control::Device
 		:zoom_status => 'GZ',
 		:focus_status => 'GF',
 		:iris_status => 'GI',
+		:iris_mode => 'D3',
 		:pantilt_status => 'APC',
 		:error_status => 'RER'
 	}
