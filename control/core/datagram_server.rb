@@ -1,3 +1,4 @@
+require 'socket'
 
 module Control
 
@@ -34,14 +35,10 @@ module Control
 		# Eventmachine callbacks
 		#
 		def receive_data(data)
-			#
-			# TODO:: IPv6 peername support
-			#	Use wikipedia to compare the formats
-			#	Differenciate by inspecting the size
-			#
-			ip = get_peername[2,6].unpack "nC4"
+			#ip = get_peername[2,6].unpack "nC4"
+			port, ip = Socket.unpack_sockaddr_in(get_peername)
 			begin
-				@devices["#{ip[1..-1].join(".")}:#{ip[0]}"].do_receive_data(data)
+				@devices["#{ip}:#{port}"].do_receive_data(data)
 			rescue
 				#
 				# TODO:: error messages here if device is null ect

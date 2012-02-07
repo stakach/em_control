@@ -1,29 +1,48 @@
 source 'http://rubygems.org'
 
-gem 'rails', '3.1.3'
+#
+# Rails related
+#
+gem 'rails'
+gem 'jquery-rails'
 gem 'bcrypt-ruby'
 
 
+#
+# Admin interface
+#
+gem 'rails_admin', :git => 'git://github.com/sferik/rails_admin.git'
 
-# Bundle edge Rails instead:
-# gem 'rails',     :git => 'git://github.com/rails/rails.git'
 
-#gem 'sqlite3'
+#
+# Database
+#
 gem 'pg'
+
+#
+# Required for control
+#
 gem 'eventmachine', "~>1.0.0.beta" 
 gem 'em-websocket'
-gem 'algorithms'
-gem 'em-priority-queue', "~> 1.0.0"
+gem 'stakach-algorithms'
+gem 'em-priority-queue'
 gem 'em-http-request'
-gem 'simple_oauth'
-gem 'yajl-ruby'
 
 
 #
 # ACA Core Plugins
 #
-gem 'login', :path => 'vendor/acacore/login'
+gem 'login', :git => 'git@advanced.plan.io:advanced-authenticator.git'
+
+
+#
+# Per-Project requirements
+#
+gem 'simple_oauth'			# for Twitter auth
+gem 'yajl-ruby'				# Required for JSONResponse middleware in em-http-request
+
 gem 'podsystem', :path => '../../interfaces/podsystem'
+
 
 
 # Gems used only for assets and not required
@@ -33,9 +52,6 @@ group :assets do
   gem 'coffee-rails', "~> 3.1.1"
   gem 'uglifier', "1.0.3"
 end
-
-gem 'jquery-rails'
-gem 'rails_admin', :path => '../../admin'
 
 # Use unicorn as the web server
 # gem 'unicorn'
