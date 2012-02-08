@@ -24,8 +24,7 @@ gem 'pg'
 #
 gem 'eventmachine', ">= 1.0.0.beta.3"
 gem 'em-websocket'
-gem 'stakach-algorithms'
-gem 'em-priority-queue', :git => 'git://github.com/stakach/em-priority-queue.git'
+gem 'em-priority-queue'
 gem 'em-http-request'
 
 
