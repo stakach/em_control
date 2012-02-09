@@ -291,6 +291,8 @@ var acaControl = {
 					return false;
 				}
 			}
+			
+			authCount += 1;
 		});
 		
 		this.bind('system', function(){

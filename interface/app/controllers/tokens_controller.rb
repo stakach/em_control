@@ -13,7 +13,7 @@ class TokensController < ActionController::Base
 		# respond with success
 		#
 		dev = TrustedDevice.try_to_login(params[:key], true)	# true means gen the next key
-		if params[:system].present? && params[:system].to_i == dev.control_system_id
+		if params[:system].present? && dev.present? && params[:system].to_i == dev.control_system_id
 			session[:token] = dev.user_id
 			session[:system] = dev.control_system_id
 			session[:key] = params[:key]

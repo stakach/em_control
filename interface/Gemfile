@@ -40,7 +40,7 @@ gem 'login', :git => 'git@advanced.plan.io:advanced-authenticator.git'
 gem 'simple_oauth'			# for Twitter auth
 gem 'yajl-ruby'				# Required for JSONResponse middleware in em-http-request
 
-gem 'podsystem', :path => '../../interfaces/podsystem'
+gem 'padsystem', :path => '../../interfaces/padsystem'
 
 
 
