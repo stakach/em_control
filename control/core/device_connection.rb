@@ -1,32 +1,10 @@
-
+require 'atomic'
 
 #
 # This contains the basic constructs required for
 #	serialised comms over TCP and UDP
 #
 module Control
-	
-	class Atomic
-		def initialize(value)
-			@value = value
-			@value_lock = Mutex.new
-		end
-		
-		def value
-			@value_lock.synchronize { @value }
-		end
-		
-		def value=(newval)
-			@value_lock.synchronize { @value = newval }
-		end
-		
-		def update
-			@value_lock.synchronize {
-				@value = yield @value
-			}
-		end
-	end
-	
 	module DeviceConnection
 		def initialize *args
 			super

@@ -22,10 +22,11 @@ gem 'pg'
 #
 # Required for control
 #
-gem 'eventmachine', ">= 1.0.0.beta.3"
-gem 'em-websocket'
-gem 'em-priority-queue'
-gem 'em-http-request'
+gem 'eventmachine', ">= 1.0.0.beta.3"	# Evented comms
+gem 'em-websocket'						# Web page communication
+gem 'em-priority-queue'					# Command Queueing
+gem 'em-http-request'					# HTTP service support
+gem 'atomic'							# Atomic operations
 
 
 #

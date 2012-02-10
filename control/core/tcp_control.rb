@@ -1,3 +1,5 @@
+require 'atomic'
+
 module Control
 
 	class Device

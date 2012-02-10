@@ -31,7 +31,7 @@
 #
 #
 class SharpLcd < Control::Device
-	DelayTime = 1.0 / 9.0	# Time of 111ms from recieve before next send
+	DelayTime = 1.0 / 7.0	# Time of 111ms from recieve before next send
 	
 
 	#
@@ -54,7 +54,8 @@ class SharpLcd < Control::Device
 		
 		base.default_send_options = {
 			:delay_on_recieve => DelayTime,		# Delay time required between commands
-			:retry_on_disconnect => false		# Don't retry last command sent
+			:retry_on_disconnect => false,		# Don't retry last command sent
+			:timeout => 6
 		}
 		#base.config = {
 		#	:clear_queue_on_disconnect => true	# Clear the queue as we need to send login
