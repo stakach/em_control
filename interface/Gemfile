@@ -32,7 +32,7 @@ gem 'atomic'							# Atomic operations
 #
 # ACA Core Plugins
 #
-gem 'login', :git => 'git@advanced.plan.io:advanced-authenticator.git'
+gem 'login', :git => 'git://github.com/stakach/advanced-authenticator.git'
 
 
 #

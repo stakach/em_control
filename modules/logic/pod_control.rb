@@ -123,6 +123,21 @@ class PodControl < Control::Logic
 	end
 	
 	
+	def do_share(value)
+		self[:share_display] = value
+		#
+		# TODO:: Switch input here (which input?)
+		#
+	end
+	
+	def enable_sharing(value)
+		if self[:share_display]
+			do_share(false)
+		end
+		self[:sharing_avaliable] = value
+	end
+	
+	
 	protected
 	
 	
