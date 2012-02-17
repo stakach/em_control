@@ -331,7 +331,11 @@ RailsAdmin.config do |config|
 	end
 	
 	def dev_label_method
-		"#{self.dependency.actual_name} instance"
+		if self.dependency.present?
+			"#{self.dependency.actual_name} instance"
+		else
+			"instance"
+		end
 	end
 	
 	
