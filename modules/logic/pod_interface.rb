@@ -4,11 +4,18 @@ require 'json'
 class PodInterface < Control::Logic		
 	module AMXInterface
 		def post_init
-			#
-			# Someone connected -- check they are valid
-			#
-			port, ip = Socket.unpack_sockaddr_in(get_peername)
-			System.logger.info "AMX POD Interface -- connection from: #{ip}"
+			begin
+				#
+				# Someone connected -- check they are valid
+				#
+				port, ip = Socket.unpack_sockaddr_in(get_peername)
+				System.logger.info "AMX POD Interface -- connection from: #{ip}"
+			rescue => e
+				Control.print_error(logger, e, {
+					:message => "module PodInterface error starting connection",
+					:level => Logger::ERROR
+				})
+			end
 		end
 	
 		def receive_data(data)
