@@ -8,6 +8,7 @@ class PodInterface < Control::Logic
 			# Someone connected -- check they are valid
 			#
 			port, ip = Socket.unpack_sockaddr_in(get_peername)
+			logger.info "AMX POD Interface -- connection from: #{ip}"
 		end
 	
 		def receive_data(data)
@@ -40,16 +41,19 @@ class PodInterface < Control::Logic
 
 	def on_load
 		@server = EventMachine::start_server '127.0.0.1', 24842, AMXInterface
+		logger.info "AMX POD Interface started"
 	end
 	
 	
 	def on_unload
 		EventMachine::stop_server(@server) unless @server.nil?
+		logger.info "AMX POD Interface stopped"
 	end
 	
 	
 	def on_update
 		EventMachine::stop_server(@server) unless @server.nil?
 		@server = EventMachine::start_server '127.0.0.1', 24842, AMXInterface
+		logger.info "AMX POD Interface reloaded"
 	end
 end
