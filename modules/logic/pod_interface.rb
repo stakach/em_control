@@ -61,7 +61,7 @@ class PodInterface < Control::Logic
 	end
 
 	def on_load
-		@server = EventMachine::start_server '127.0.0.1', 24842, AMXInterface
+		@server = EventMachine::start_server '0.0.0.0', 24842, AMXInterface
 		logger.info "AMX POD Interface started"
 	end
 	
@@ -74,7 +74,7 @@ class PodInterface < Control::Logic
 	
 	def on_update
 		EventMachine::stop_server(@server) unless @server.nil?
-		@server = EventMachine::start_server '127.0.0.1', 24842, AMXInterface
+		@server = EventMachine::start_server '0.0.0.0', 24842, AMXInterface
 		logger.info "AMX POD Interface reloaded"
 	end
 end
