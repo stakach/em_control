@@ -8,7 +8,7 @@ class PodInterface < Control::Logic
 			# Someone connected -- check they are valid
 			#
 			port, ip = Socket.unpack_sockaddr_in(get_peername)
-			logger.info "AMX POD Interface -- connection from: #{ip}"
+			System.logger.info "AMX POD Interface -- connection from: #{ip}"
 		end
 	
 		def receive_data(data)
