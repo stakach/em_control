@@ -9,9 +9,9 @@ class PodInterface < Control::Logic
 				# Someone connected -- check they are valid
 				#
 				port, ip = Socket.unpack_sockaddr_in(get_peername)
-				System.logger.info "AMX POD Interface -- connection from: #{ip}"
+				Control::System.logger.info "AMX POD Interface -- connection from: #{ip}"
 			rescue => e
-				Control.print_error(logger, e, {
+				Control.print_error(Control::System.logger, e, {
 					:message => "module PodInterface error starting connection",
 					:level => Logger::ERROR
 				})
@@ -19,28 +19,42 @@ class PodInterface < Control::Logic
 		end
 	
 		def receive_data(data)
-			(@buffer ||= BufferedTokenizer.new('' << 0x03)).extract(data).each do |line|
-				line = line.split("" << 0x02)
-				if line.length >= 2
-					
-					EM.defer do
-						begin
-							line = JSON.parse(line[-1], {:symbolize_names => true})
-							
-							#
-							# Process commands here
-							#
-							
-							ActiveRecord::Base.clear_active_connections!
-						rescue => e
-							Control.print_error(logger, e, {
-								:message => "module PodInterface error processing AMX command",
-								:level => Logger::ERROR
-							})
-						end
+			begin
+				(@buffer ||= BufferedTokenizer.new('' << 0x03)).extract(data).each do |line|
+					line = line.split("" << 0x02)
+					if line.length >= 2
+						
+						process_command(line)
+						
 					end
+				end
+			rescue => e
+				EM.defer do
+					Control.print_error(Control::System.logger, e, {
+						:message => "module PodInterface error extracting data",
+						:level => Logger::ERROR
+					})
+				end
+			end
+		end
+		
+		protected
+		
+		def process_command(line)
+			EM.defer do
+				begin
+					line = JSON.parse(line[-1], {:symbolize_names => true})
 					
+					#
+					# Process commands here
+					#
 					
+					ActiveRecord::Base.clear_active_connections!
+				rescue => e
+					Control.print_error(Control::System.logger, e, {
+						:message => "module PodInterface error processing AMX command",
+						:level => Logger::ERROR
+					})
 				end
 			end
 		end
