@@ -1,7 +1,7 @@
 #
 # For use with the example interface to demonstrate how to interact with interfaces
 #
-class FlexibleInterface < Control::Logic
+class FlexiInterface < Control::Logic
 
 	#
 	# Module callbacks
