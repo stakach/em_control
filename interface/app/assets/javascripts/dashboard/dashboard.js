@@ -222,7 +222,7 @@ jQuery(document).ready(function($) {
 	var	loggedin = false,
 		callback,
 		term = $('#tilda'),
-		patt = /\w+|"[\w\s]*"/g;
+		patt = /\w+|".*"/g;
 		
 	$.Storage.remove('token_tilda', null);
 	$.Storage.remove('login_tilda', null);
@@ -291,7 +291,7 @@ jQuery(document).ready(function($) {
 			
 			if(con.is_connected()){
 
-				var username = login.split('\\'),
+				var username = login.split(/\\|\//),	// slash either way
 					domain = username[0];
 				username = username[1];
     			
