@@ -314,8 +314,8 @@ module Control
 			#
 			# Setup the systems links
 			#
-			@@systems[@controller.name.to_sym] = self
 			@@god_lock.synchronize {
+				@@systems[@controller.name.to_sym] = self	# it may not be started
 				@@controllers[@controller.id] = self
 			}
 			
