@@ -146,12 +146,11 @@ module Control
 			@sys_lock.synchronize {
 				@@god_lock.synchronize {
 					@@systems.delete(@controller.name.to_sym)
-					@controller.reload(:lock => true)
+					@controller.reload #(:lock => true)
 					@@systems[@controller.name.to_sym] = self
 				}
 				
 				if !@controller.active || force
-					
 					if @logger.nil?
 						if Rails.env.production?
 							@logger = Logger.new("#{ROOT_DIR}/interface/log/system_#{@controller.id}.log", 10, 4194304)
