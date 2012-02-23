@@ -16,6 +16,7 @@ require 'rubygems'
 require 'eventmachine'
 require 'em-priority-queue'
 require 'em-http'
+require 'em-resolv-replace'
 
 
 #

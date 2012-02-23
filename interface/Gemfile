@@ -26,6 +26,7 @@ gem 'eventmachine', ">= 1.0.0.beta.3"	# Evented comms
 gem 'em-websocket'						# Web page communication
 gem 'em-priority-queue'					# Command Queueing
 gem 'em-http-request'					# HTTP service support
+gem 'em-resolv-replace'					# Evented DNS resolver
 gem 'atomic'							# Atomic operations
 
 
@@ -42,6 +43,7 @@ gem 'simple_oauth'			# for Twitter auth
 gem 'yajl-ruby'				# Required for JSONResponse middleware in em-http-request
 
 gem 'padsystem', :path => '../../interfaces/padsystem'
+gem 'flexible_interface', :path => '../../interfaces/example'
 
 
 
