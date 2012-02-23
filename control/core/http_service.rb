@@ -80,7 +80,7 @@ module Control
 			#
 			# Queues
 			#
-			@task_queue = Queue.new			# basically we add tasks here that we want to run in a strict order
+			@task_queue = EM::Queue.new			# basically we add tasks here that we want to run in a strict order
 			@wait_queue = EM::Queue.new
 			@send_queue = EM::PriorityQueue.new(:fifo => true) {|x,y| x < y}	# regular priority
 			
@@ -112,25 +112,26 @@ module Control
 			#
 			# Task event loop
 			#
-			EM.defer do
-				while true
-					begin
-						task = @task_queue.pop
-						break if @shutting_down.value
-						
-						@task_lock.synchronize {
-							task.call
-						}
-					rescue => e
-						Control.print_error(logger, e, {
-							:message => "module #{@parent.class} in http_service.rb : error in task loop",
-							:level => Logger::ERROR
-						})
-					ensure
-						ActiveRecord::Base.clear_active_connections!
+			@task_queue_proc = Proc.new do |task|
+				if !@shutting_down.value
+					EM.defer do
+						begin
+							@task_lock.synchronize {
+								task.call
+							}
+						rescue => e
+							Control.print_error(logger, e, {
+								:message => "module #{@parent.class} in http_service.rb : error in task loop",
+								:level => Logger::ERROR
+							})
+						ensure
+							ActiveRecord::Base.clear_active_connections!
+							@task_queue.pop &@task_queue_proc	# First task is ready
+						end
 					end
 				end
 			end
+			@task_queue.pop &@task_queue_proc	# First task is ready
 			
 			
 			#

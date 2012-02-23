@@ -1,11 +1,13 @@
 module Control
 	class Modules
 		@@modules = {}	# modules (dependency_id => module class)
-		@@load_lock = Mutex.new
+		@@load_lock = Object.new.extend(MonitorMixin) #Mutex.new
 		@@loading = nil
 	
 		def self.[] (dep_id)
-			@@modules[dep_id]
+			@@load_lock.mon_synchronize {
+				@@modules[dep_id]
+			}
 		end
 	
 		def self.load_lock
@@ -13,31 +15,41 @@ module Control
 		end
 	
 		def self.loading
-			@@loading
+			@@load_lock.mon_synchronize {
+				return @@loading
+			}
 		end
 	
 		def self.loading=(mod)
-			@@loading = mod
+			@@load_lock.mon_synchronize {
+			
+				@@loading = mod
+			
+			}
 		end
 	
 		def self.load_module(dep)
-			begin
-				if File.exists?(ROOT_DIR + '/modules/device/' + dep.filename)
-					load ROOT_DIR + '/modules/device/' + dep.filename
-				elsif File.exists?(ROOT_DIR + '/modules/service/' + dep.filename)
-					load ROOT_DIR + '/modules/service/' + dep.filename
-				elsif File.exists?(ROOT_DIR + '/modules/logic/' + dep.filename)
-					load ROOT_DIR + '/modules/logic/' + dep.filename
-				else
-					raise "File not found!"
+			@@load_lock.mon_synchronize {
+			
+				begin
+					if File.exists?(ROOT_DIR + '/modules/device/' + dep.filename)
+						load ROOT_DIR + '/modules/device/' + dep.filename
+					elsif File.exists?(ROOT_DIR + '/modules/service/' + dep.filename)
+						load ROOT_DIR + '/modules/service/' + dep.filename
+					elsif File.exists?(ROOT_DIR + '/modules/logic/' + dep.filename)
+						load ROOT_DIR + '/modules/logic/' + dep.filename
+					else
+						raise "File not found!"
+					end
+					@@modules[dep.id] = dep.classname.classify.constantize
+				rescue => e
+					Control.print_error(System.logger, e, {
+						:message => "device module #{dep.actual_name} error whilst loading",
+						:level => Logger::ERROR
+					})
 				end
-				@@modules[dep.id] = dep.classname.classify.constantize
-			rescue => e
-				Control.print_error(System.logger, e, {
-					:message => "device module #{dep.actual_name} error whilst loading",
-					:level => Logger::ERROR
-				})
-			end
+			
+			}
 		end
 	end
 
@@ -127,7 +139,7 @@ module Control
 				
 				
 				devBase = nil
-				Modules.load_lock.synchronize {
+				Modules.load_lock.mon_synchronize {
 					Modules.loading = @instance
 					
 					if !controllerDevice.udp
