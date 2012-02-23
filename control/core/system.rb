@@ -13,12 +13,24 @@ module Control
 			controller = ControlSystem.find(controller) if controller.class == Fixnum
 			controller = ControlSystem.where('name = ?', controller).first if controller.class == String
 			
-			@@god_lock.lock
-			if @@controllers[controller.id].nil?
-				@@god_lock.unlock
-				System.new(controller, log_level)
-			else
-				@@god_lock.unlock
+			begin
+				@@god_lock.lock
+				if @@controllers[controller.id].nil?
+					@@god_lock.unlock
+					System.new(controller, log_level)
+				else
+					@@god_lock.unlock
+				end
+			rescue => e
+				begin
+					@@god_lock.unlock
+				rescue
+				end
+				
+				Control.print_error(@@logger, e, {
+					:message => "class System in self.new_system",
+					:level => Logger::ERROR
+				})
 			end
 		end
 		

@@ -54,7 +54,7 @@ class SharpLcd < Control::Device
 		
 		base.default_send_options = {
 			:delay_on_recieve => DelayTime,		# Delay time required between commands
-			:retry_on_disconnect => false,		# Don't retry last command sent
+			:retry_on_disconnect => false,		# Don't retry last command sent as we need to login
 			:timeout => 6
 		}
 		#base.config = {
@@ -94,16 +94,17 @@ class SharpLcd < Control::Device
 		
 		if [On, "on", :on].include?(state)
 			#self[:power_target] = On
-			if !self[:power]
+			if !power_on?
 				do_send('POWR   1', :timeout => delay + 15)
 				self[:warming] = true
 				self[:power] = On
 				logger.debug "-- Sharp LCD, requested to power on"
-				power_on?
+				
+				power_on?	# clears warming
 			end
 		else
 			#self[:power_target] = Off
-			if self[:power]
+			if power_on?
 				do_send('POWR   0', :timeout => 15)
 				
 				self[:power] = Off
