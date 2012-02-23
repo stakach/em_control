@@ -31,6 +31,8 @@ module Control
 					:message => "class System in self.new_system",
 					:level => Logger::ERROR
 				})
+			ensure
+				ActiveRecord::Base.clear_active_connections!	# Clear any unused connections
 			end
 		end
 		
@@ -64,6 +66,8 @@ module Control
 					updated[inst] = true
 				end
 			end
+			
+			ActiveRecord::Base.clear_active_connections!	# Clear any unused connections
 		end
 		
 		#
