@@ -53,11 +53,11 @@ class PodInterface < Control::Logic
 					
 					if line[:presentation].present?
 						systems.each do |pod|
-							System[pod.name][:Pod].enable_sharing(line[:presentation])
+							Control::System[pod.name][:Pod].enable_sharing(line[:presentation])
 						end
 					elsif line[:override].present?
 						systems.each do |pod|
-							System[pod.name][:Pod].do_share(line[:override])
+							Control::System[pod.name][:Pod].do_share(line[:override])
 						end
 					else
 						failed = true
