@@ -72,6 +72,10 @@ class PodInterface < Control::Logic
 						:message => "module PodInterface error processing AMX command",
 						:level => Logger::ERROR
 					})
+					begin
+						send_data("" << 0x02 << JSON.generate({'result' => 'server error'}) << 0x03)
+					rescue
+					end
 				end
 			end
 		end
