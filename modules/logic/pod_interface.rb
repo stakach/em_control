@@ -24,7 +24,7 @@ class PodInterface < Control::Logic
 					line = line.split("" << 0x02)
 					if line.length >= 2
 						
-						process_command(line)
+						process_command(line[-1])
 						
 					end
 				end
@@ -43,11 +43,28 @@ class PodInterface < Control::Logic
 		def process_command(line)
 			EM.defer do
 				begin
-					line = JSON.parse(line[-1], {:symbolize_names => true})
+					line = JSON.parse(line, {:symbolize_names => true})
 					
 					#
 					# Process commands here
 					#
+					systems = Zone.where(:name => line[:control]).first.control_systems
+					failed = false
+					
+					if line[:presentation].present?
+						systems.each do |pod|
+							System[pod.name][:Pod].enable_sharing(line[:presentation])
+						end
+					elsif line[:override].present?
+						systems.each do |pod|
+							System[pod.name][:Pod].do_share(line[:override])
+						end
+					else
+						failed = true
+						send_data("" << 0x02 << JSON.generate({'result' => false}) << 0x03)
+					end
+					
+					send_data("" << 0x02 << JSON.generate({'result' => true}) << 0x03) unless failed
 					
 					ActiveRecord::Base.clear_active_connections!
 				rescue => e

@@ -267,7 +267,12 @@ class NecLcd < Control::Device
 					end
 				elsif data[10..13] == "00D6"	# Power status response
 					if data[10..11] == "00"
-						self[:power] = data[23] == '1'		# On == 1, Off == 4
+						if data[23] == '1'		# On == 1, Off == 4
+							self[:power] = On
+						else
+							self[:power] = Off
+							self[:warming] = false
+						end
 						#if self[:power_target].nil?
 						#	self[:power_target] = self[:power]
 						#elsif self[:power_target] != self[:power]

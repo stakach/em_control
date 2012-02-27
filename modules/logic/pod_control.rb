@@ -105,7 +105,7 @@ class PodControl < Control::Logic
 						default_display_config
 					end
 				else
-					select('in-house-pc')
+					select('in-house-pc') unless self[:share_display]
 			end
 		end
 	end
@@ -124,10 +124,16 @@ class PodControl < Control::Logic
 	
 	
 	def do_share(value)
-		self[:share_display] = value
-		#
-		# TODO:: Switch input here (which input?)
-		#
+		if value == true && self[:share_display] == false
+			self[:old_input] = self[:input]
+			self[:share_display] = true
+			select('sharing_input')
+			system[:Display].mute
+		elsif self[:share_display] == true
+			system[:Display].unmute
+			self[:share_display] = false
+			select(self[:old_input])
+		end
 	end
 	
 	def enable_sharing(value)
