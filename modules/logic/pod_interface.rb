@@ -51,11 +51,11 @@ class PodInterface < Control::Logic
 					systems = Zone.where(:name => line[:control]).first.control_systems
 					failed = false
 					
-					if line[:presentation].present?
+					if not line[:presentation].nil?
 						systems.each do |pod|
 							Control::System[pod.name][:Pod].enable_sharing(line[:presentation])
 						end
-					elsif line[:override].present?
+					elsif not line[:override].nil?
 						systems.each do |pod|
 							Control::System[pod.name][:Pod].do_share(line[:override])
 						end
