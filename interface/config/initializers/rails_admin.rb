@@ -1,7 +1,6 @@
 RailsAdmin.config do |config|
 
-  config.current_user_method { current_rake db:migrate } #auto-generated
-	
+	config.current_user_method { current_rake db:migrate } #auto-generated
 	
 	config.included_models = ['User', 'Group', 'AuthSource', 'Zone', 'TrustedDevice', 'Dependency', 'Setting', 'ControlSystem', 'ControllerLogic', 'ControllerDevice', 'ControllerHttpService', 'Server']
 	config.label_methods << :identifier << :hostname
@@ -85,7 +84,7 @@ RailsAdmin.config do |config|
 		
 		list do
 			field :identifier do
-					label 'Group'
+				label 'Group'
 			end
 			field :description
 			field :notes

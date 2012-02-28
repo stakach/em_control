@@ -23,6 +23,8 @@ class PodControl < Control::Logic
 		register(:Display, :input)	# expects display_input_change
 		register(:Display, :power)	# expects display_power_change
 		
+		self[:share_display] = false
+		
 		update_help
 		@polling_timer = periodic_timer(3600) do
 			update_help
@@ -39,6 +41,7 @@ class PodControl < Control::Logic
 	def on_update
 		self[:laptop1] = setting(:laptop1)
 		self[:laptop2] = setting(:laptop2)
+		self[:share_display] = false
 	end
 
 
