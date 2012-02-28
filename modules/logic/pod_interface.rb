@@ -53,11 +53,29 @@ class PodInterface < Control::Logic
 					
 					if not line[:presentation].nil?
 						systems.each do |pod|
-							Control::System[pod.name][:Pod].enable_sharing(line[:presentation])
+							EM.defer do
+								begin
+									Control::System[pod.name][:Pod].enable_sharing(line[:presentation])
+								rescue => e
+									Control.print_error(Control::System.logger, e, {
+										:message => "module PodInterface error enabling presentation on pod #{pod.name}",
+										:level => Logger::WARN
+									})
+								end
+							end
 						end
 					elsif not line[:override].nil?
 						systems.each do |pod|
-							Control::System[pod.name][:Pod].do_share(line[:override])
+							EM.defer do
+								begin
+									Control::System[pod.name][:Pod].do_share(line[:override])
+								rescue => e
+									Control.print_error(Control::System.logger, e, {
+										:message => "module PodInterface error overriding pod #{pod.name}",
+										:level => Logger::WARN
+									})
+								end
+							end
 						end
 					else
 						failed = true
