@@ -119,17 +119,21 @@ module Control
 
 		def send(data, options = {}, *args, &block)
 			begin
+=begin
 				if options[:emit].present?
 					logger.debug "Emit set: #{options[:emit]}"
 					@status_lock.lock
 					emit = options[:emit]
 					#emit = options.delete(:emit)
 				end
-			
+=end
+				emit = options.delete(:emit)	# TODO:: Emit can't block deferred thread
 				error = @base.do_send_command(data, options, *args, &block)
 			
 				if emit.present?
-				
+					return @status[emit]
+					
+=begin
 					stat = @status[emit]
 					return stat if error == true  # TODO:: fix deadlock
 					
@@ -160,8 +164,8 @@ module Control
 					
 					stat = @status[emit]
 					return stat
+=end
 				end
-
 			rescue => e
 				Control.print_error(logger, e, {
 					:message => "module #{self.class} in send",
