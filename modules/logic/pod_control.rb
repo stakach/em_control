@@ -26,15 +26,17 @@ class PodControl < Control::Logic
 		self[:share_display] = false
 		
 		update_help
-		@polling_timer = schedule.every('1h') do
+		schedule.every('1h') do
 			update_help
+		end
+		schedule.cron('0 2 * * *') do 	# Every day at 2am
+			self[:display_refresh] = Time.now.to_i
 		end
 	end
 	
 	
 	def on_unload
-		@polling_timer.unschedule unless @polling_timer.nil?
-		@polling_timer = nil
+		
 	end
 	
 	
