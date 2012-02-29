@@ -92,8 +92,8 @@ class LgLcd < Control::Device
 		volume_status(0)
 	end
 	
-	def power_on?
-		do_send('ka', 0xFF, :emit => :power)
+	def power_on?(&block)
+		do_send('ka', 0xFF, :emit => {:power => block})
 	end
 	
 
@@ -136,17 +136,21 @@ class LgLcd < Control::Device
 	def channel(number)
 		input = self[:input]
 		
+		switch = Proc.new {|input|
+			command = 'ma 00 ' << (number >> 8 & 0xFF).to_s(16).rjust(2, '0') << ' ' << (number & 0xFF).to_s(16).rjust(2, '0')
+			if input == :tv
+				command << " 10\r"	# DTV
+			else
+				command << " 00\r"	# ATV
+			end
+			send(command)
+		}
+		
 		if not input.to_s =~ /tv/
-			input = switch_to(:tv, :emit => :input)
-		end
-
-		command = 'ma 00 ' << (number >> 8 & 0xFF).to_s(16).rjust(2, '0') << ' ' << (number & 0xFF).to_s(16).rjust(2, '0')
-		if input == :tv
-			command << " 10\r"	# DTV
+			input = switch_to(:tv, :emit => {:input => switch})
 		else
-			command << " 00\r"	# ATV
+			switch.call(input)	# no need to wait
 		end
-		send(command)
 	end
 	
 	

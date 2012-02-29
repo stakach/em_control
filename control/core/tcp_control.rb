@@ -104,8 +104,7 @@ module Control
 				
 				EM.defer do
 					if !@shutting_down.value
-					
-						@parent.clear_emit_waits
+						
 						@task_queue.push lambda {
 							@parent[:connected] = false
 							return unless @parent.respond_to?(:disconnected)

@@ -77,8 +77,8 @@ class PanasonicHe870 < Control::Device
 		end
 	end
 
-	def power?
-		do_send('O', '', :emit => :power, :wait => true)
+	def power?(&block)
+		do_send('O', '', :emit => {:power => block}, :wait => true)
 	end
 	
 

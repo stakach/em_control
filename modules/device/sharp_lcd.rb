@@ -93,32 +93,32 @@ class SharpLcd < Control::Device
 	def power(state)
 		delay = self[:power_on_delay] || 5
 		
-		if [On, "on", :on].include?(state)
-			#self[:power_target] = On
-			if !power_on?
-				do_send('POWR   1', :timeout => delay + 15)
-				self[:warming] = true
-				self[:power] = On
-				logger.debug "-- Sharp LCD, requested to power on"
-				
-				power_on?	# clears warming
+		power_on? do |result|
+			if [On, "on", :on].include?(state)
+				if result == Off
+					do_send('POWR   1', :timeout => delay + 15)
+					self[:warming] = true
+					self[:power] = On
+					logger.debug "-- Sharp LCD, requested to power on"
+					
+					do_send('POWR????', {:timeout => 10, :value_ret_only => :POWR})	# clears warming
+				end
+			else
+				if result == On
+					do_send('POWR   0', :timeout => 15)
+					
+					self[:power] = Off
+					logger.debug "-- Sharp LCD, requested to power off"
+				end
 			end
-		else
-			#self[:power_target] = Off
-			if power_on?
-				do_send('POWR   0', :timeout => 15)
-				
-				self[:power] = Off
-				logger.debug "-- Sharp LCD, requested to power off"
-			end
+			
+			mute_status(0)
+			volume_status(0)
 		end
-		
-		mute_status(0)
-		volume_status(0)
 	end
 	
-	def power_on?
-		do_send('POWR????', {:emit => :power, :timeout => 10, :value_ret_only => :POWR})
+	def power_on?(&block)
+		do_send('POWR????', {:emit => {:power => block}, :timeout => 10, :value_ret_only => :POWR})
 	end
 	
 	
@@ -318,14 +318,16 @@ class SharpLcd < Control::Device
 	
 
 	def do_poll
-		do_send('POWR????', {:timeout => 10, :value_ret_only => :POWR, :priority => 99})
-		power_on_delay
-		video_input
-		#power_on?	# no emits on recieve!!
-		#audio_input
-		mute_status
-		brightness_status
-		contrast_status
+		power_on? do |result|
+			if result == On
+				power_on_delay
+				video_input
+				#audio_input
+				mute_status
+				brightness_status
+				contrast_status
+			end
+		end
 	end
 
 

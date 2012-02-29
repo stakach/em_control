@@ -379,7 +379,7 @@ module Control
 					:level => Logger::ERROR
 				})
 			ensure
-				@parent.mark_emit_end(command[:emit]) if command[:emit].present?
+				@parent.mark_emit_end if command[:emit].present?
 				ActiveRecord::Base.clear_active_connections!
 			end
 			
@@ -513,7 +513,6 @@ module Control
 				
 				EM.defer do
 					begin
-						@parent.clear_emit_waits
 						if @parent.respond_to?(:on_unload)
 							@task_lock.synchronize {
 								@parent.on_unload

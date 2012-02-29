@@ -223,8 +223,8 @@ class AllNec < Control::Device
 	end
 	
 
-	def lamp_on?
-		send(COMMAND[:status_lamp], {:hex_string => true, :emit => :lamp_status})
+	def lamp_on?(&block)
+		send(COMMAND[:status_lamp], {:hex_string => true, :emit => {:lamp_status => block}})
 	end
 
 

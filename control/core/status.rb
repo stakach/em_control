@@ -13,10 +13,8 @@ module Control
 		
 		def []= (status, data)
 			status = status.to_sym if status.class == String
-			old_data = nil
-			@status_lock.synchronize {
-				old_data = check_for_emit(status, data)
-			}
+			old_data = check_for_emit(status, data)
+			
 			if data != old_data
 				changed								# so that the notify is applied
 				logger.debug "#{self.class} status updated: #{status} = #{data}"
@@ -31,57 +29,54 @@ module Control
 		
 		def mark_emit_start(status)
 			@status_lock.synchronize {
-				if @status_emit.has_key?(status) && @status_emit[status].length > 0
-					@emit_has_occured = false
-				end
+				@emit_hasnt_occured = status
 			}
 		end
 		
-		def mark_emit_end(status)
+		def mark_emit_end
 			@status_lock.synchronize {
-				if @status_emit.has_key?(status) && @status_emit[status].length > 0
-					if not @emit_has_occured
-						@emit_has_occured = true
-						@status_emit[status].shift.broadcast
-						logger.debug "A forced emit on #{status} occured"
+				@emit_hasnt_occured.each_pair do | key, block |
+					data = @status[key]
+					task do
+						block.call(data)
+						ActiveRecord::Base.clear_active_connections!
 					end
+					logger.debug "A forced emit on #{status} occured"
 				end
-			}
-		end
-		
-		
-		def clear_emit_waits
-			@status_lock.synchronize {
-				@status_emit.each_value do |status|
-					while status.length > 0
-						status.shift.broadcast
-					end
-				end
+				
+				@emit_hasnt_occured = nil
 			}
 		end
 		
 		
 		protected
 		
-		def check_for_emit(status, data)
 		
-			old_data = @status[status]
-			@status[status] = data
-			if @status_emit.has_key?(status) && @status_emit[status].length > 0
-				begin
-					@base.received_lock.mon_exit				# check we are in the send queue
-					@base.received_lock.mon_enter
-					@status_emit[status].shift.broadcast	# wake up the thread
-					@emit_has_occured = true
-				rescue
-					# Emit can only occur in the recieve queue
-					# We must already have the lock
-					logger.debug "An emit on #{status} occured outside received function"
+		def check_for_emit(status, data)
+			@status_lock.synchronize {
+				old_data = @status[status]
+				@status[status] = data
+				
+				if @emit_hasnt_occured.present?
+					begin
+						if @emit_hasnt_occured.has_key?(status)
+							@base.received_lock.mon_exit				# check we are in the recieved queue
+							@base.received_lock.mon_enter
+						
+							block = @emit_hasnt_occured.delete(status)
+							task do
+								block.call(data)
+								ActiveRecord::Base.clear_active_connections!
+							end
+						#logger.debug "Emit clear success: #{status}"
+						end
+					rescue
+						logger.debug "An emit on #{status} occured outside received function"
+					end
 				end
-				#logger.debug "Emit clear success: #{status}"
-			end
-			old_data
-			
+				
+				return old_data
+			}
 		end
 	end
 

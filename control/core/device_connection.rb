@@ -320,7 +320,7 @@ module Control
 						})
 					ensure
 						if command.present?
-							@parent.mark_emit_end(command[:emit]) if command[:emit].present?
+							@parent.mark_emit_end if command[:emit].present?
 						end
 						ActiveRecord::Base.clear_active_connections!
 					end
@@ -611,7 +611,6 @@ module Control
 				EM.defer do
 					begin
 						@parent[:connected] = false	# Communicator off at this point
-						@parent.clear_emit_waits
 						if @parent.respond_to?(:disconnected)
 							@task_lock.synchronize {
 								@parent.disconnected

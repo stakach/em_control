@@ -52,24 +52,26 @@ class PodControl < Control::Logic
 		# Check the display is on.
 		#	If not then power it on.
 		#
-		if !system[:Display].power_on?
-			system[:Display].power(On)
-		end
-		
-		#
-		# Switch to the correct video source
-		#	Based on the settings (input == 'in-house-pc' or 'laptop1' or 'laptop2')
-		#
-		system[:Display].switch_to(setting(input))
-		self[:input] = input
-		
-		#
-		# Switch to the correct audio source
-		#
-		if(input == 'in-house-pc')
-			system[:Display].switch_audio(:audio1)
-		else
-			system[:Display].switch_audio(:audio2)
+		system[:Display].power_on? do |power|
+			if power == Off
+				system[:Display].power(On)
+			end
+			
+			#
+			# Switch to the correct video source
+			#	Based on the settings (input == 'in-house-pc' or 'laptop1' or 'laptop2')
+			#
+			system[:Display].switch_to(setting(input))
+			self[:input] = input
+			
+			#
+			# Switch to the correct audio source
+			#
+			if(input == 'in-house-pc')
+				system[:Display].switch_audio(:audio1)
+			else
+				system[:Display].switch_audio(:audio2)
+			end
 		end
 	end
 	

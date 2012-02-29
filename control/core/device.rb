@@ -89,7 +89,6 @@ module Control
 			@status = {}
 			@status_lock = Mutex.new
 			@system_lock = Mutex.new
-			@status_emit = {}	# status => condition_variable
 			@status_waiting = false
 		end
 
@@ -112,63 +111,22 @@ module Control
 		
 
 		def send(data, options = {}, *args, &block)
-			begin
-=begin
-				if options[:emit].present?
-					logger.debug "Emit set: #{options[:emit]}"
-					@status_lock.lock
-					emit = options[:emit]
-					#emit = options.delete(:emit)
-				end
-=end
-				emit = options.delete(:emit)	# TODO:: Emit can't block deferred thread
-				error = @base.do_send_command(data, options, *args, &block)
+			error = true
 			
-				if emit.present?
-					return @status[emit]
-					
-=begin
-					stat = @status[emit]
-					return stat if error == true  # TODO:: fix deadlock
-					
-					#
-					# The command is queued - we need to wait for the status to be emited
-					#
-					if @status_emit[emit].nil?
-						@status_emit[emit] = [ConditionVariable.new]
-					else
-						@status_emit[emit].push(ConditionVariable.new)
-					end
-					
-					#
-					# Allow commands following the current one to execute as high priority if in recieve
-					#	Ensures all commands that should be high priority are
-					#
-					begin
-						#
-						# Check for emit in received
-						#	TODO:: ensure early response sent else log the issue and return current value
-						#
-						@base.received_lock.mon_exit
-						@status_emit[emit].last.wait(@status_lock)	# wait for the emit to occur
-						@base.received_lock.mon_enter
-					rescue
-						@status_emit[emit].last.wait(@status_lock)	# wait for the emit to occur
-					end
-					
-					stat = @status[emit]
-					return stat
-=end
-				end
+			begin
+				error = @base.do_send_command(data, options, *args, &block)
 			rescue => e
 				Control.print_error(logger, e, {
 					:message => "module #{self.class} in send",
 					:level => Logger::ERROR
 				})
 			ensure
-				begin
-					@status_lock.unlock if @status_lock.locked?
-				rescue
+				if error
+					begin
+						logger.warn "Command send failed for: #{data.inspect}"
+					rescue
+						logger.error "Command send failed, unable to print data"
+					end
 				end
 			end
 		end
