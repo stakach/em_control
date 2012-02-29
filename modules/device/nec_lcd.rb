@@ -84,6 +84,10 @@ class NecLcd < Control::Device
 				self[:warming] = true
 				self[:power] = On
 				logger.debug "-- NEC LCD, requested to power on"
+				
+				type = :command
+				message = "01D6"				# Power status
+				send_checksum(type, message)	# Check power status
 			end
 		else
 			#self[:power_target] = Off
