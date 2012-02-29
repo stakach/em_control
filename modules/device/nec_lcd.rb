@@ -313,9 +313,9 @@ class NecLcd < Control::Device
 	def do_poll
 		#send_checksum(:command, "01D6", {:priority => 99})	#power_on?	# avoid high priority
 		
+		power_on_delay
 		power_on?(99) do |result|
 			if result == On
-				power_on_delay
 				mute_status
 				volume_status
 				brightness_status
@@ -375,7 +375,7 @@ class NecLcd < Control::Device
 					sleep(value)		# Prevent any commands being sent until the power on delay is complete
 					power_on_delay
 				else
-					one_shot(7) do		# Reactive the interface once the display is online
+					schedule.in('6s') do		# Reactive the interface once the display is online
 						self[:warming] = false	# allow access to the display
 					end
 				end
