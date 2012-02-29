@@ -45,7 +45,8 @@ class ExtronSmx < Control::Device
 		#	Hence the check if timer is nil here
 		#
 		@poll_lock.synchronize {
-			@polling_timer.cancel unless @polling_timer.nil?
+			@polling_timer.unschedule unless @polling_timer.nil?
+			@polling_timer = nil
 		}
 	end
 	
@@ -212,7 +213,7 @@ class ExtronSmx < Control::Device
 	def device_ready
 		do_send("\e3CV", :wait => true)	# Verbose mode and tagged responses
 		@poll_lock.synchronize {
-			@polling_timer = periodic_timer(120) do
+			@polling_timer = schedule.every('2m') do
 				logger.debug "-- Extron Maintaining Connection"
 				send('Q', :priority => 99)	# Low priority poll to maintain connection
 			end

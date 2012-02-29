@@ -51,7 +51,7 @@ class LgLcd < Control::Device
 	def connected
 		do_poll
 	
-		@polling_timer = periodic_timer(60) do
+		@polling_timer = schedule.every('60s') do
 			logger.debug "Polling Display"
 			do_poll
 		end
@@ -62,7 +62,7 @@ class LgLcd < Control::Device
 		# Disconnected may be called without calling connected
 		#	Hence the check if timer is nil here
 		#
-		@polling_timer.cancel unless @polling_timer.nil?
+		@polling_timer.unschedule unless @polling_timer.nil?
 		@polling_timer = nil
 	end
 	

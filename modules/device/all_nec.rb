@@ -71,7 +71,7 @@ class AllNec < Control::Device
 		#
 		# Get the state every 50 seconds :)
 		#
-		@polling_timer = periodic_timer(50) do
+		@polling_timer = schedule.every('50s') do
 			do_poll
 		end
 	end
@@ -80,7 +80,8 @@ class AllNec < Control::Device
 		#
 		# Perform any cleanup functions here
 		#
-		@polling_timer.cancel unless @polling_timer.nil?
+		@polling_timer.unschedule unless @polling_timer.nil?
+		@polling_timer = nil
 	end
 	
 

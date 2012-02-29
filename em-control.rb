@@ -17,6 +17,7 @@ require 'eventmachine'
 require 'em-priority-queue'
 require 'em-http'
 #require 'em-resolv-replace'
+require 'rufus/scheduler'
 
 
 #
@@ -42,6 +43,11 @@ require File.dirname(__FILE__) + '/control/core/http_service.rb'
 module Control
 	
 	ROOT_DIR = File.dirname(__FILE__)
+	
+	
+	def self.scheduler
+		@@scheduler
+	end
 	
 	
 	def self.get_log_level(level)
@@ -82,6 +88,12 @@ module Control
 	
 	def self.start
 		EventMachine.run do
+			#
+			# Enable the scheduling system
+			#
+			@@scheduler = Rufus::Scheduler.start_new
+			
+			
 			#
 			# Start the UDP server
 			#

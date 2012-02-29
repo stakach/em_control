@@ -22,7 +22,7 @@ class CustomLifter < Control::Device
 		self[:position_max] = 13200
 		self[:position_min] = 0
 
-		@polling_timer = periodic_timer(90) do
+		@polling_timer = schedule.every('90s') do
 			logger.debug "Polling Lifter"
 
 			#

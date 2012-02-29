@@ -33,7 +33,7 @@ class OrionLcd < Control::Device
 	def connected
 		self[:power] = Off
 	
-		@polling_timer = periodic_timer(60) do
+		@polling_timer = schedule.every('60s') do
 			logger.debug "Polling Orion"
 			do_send('FCDR', '000', {:priority => 99, :wait => false})	# Status polling is a low priority
 		end
@@ -44,7 +44,7 @@ class OrionLcd < Control::Device
 		# Disconnected may be called without calling connected
 		#	Hence the check if timer is nil here
 		#
-		@polling_timer.cancel unless @polling_timer.nil?
+		@polling_timer.unschedule unless @polling_timer.nil?
 		@polling_timer = nil
 	end
 	
@@ -173,7 +173,7 @@ class OrionLcd < Control::Device
 				
 				if !self[:power] && power
 					self[:warming] = true
-					one_shot(6) do				# Reactive the interface once the display is online
+					schedule.in('6s') do				# Reactive the interface once the display is online
 						self[:warming] = false	# allow access to the display
 					end
 				end

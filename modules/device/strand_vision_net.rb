@@ -12,7 +12,7 @@ class StrandVisionNet < Control::Device
 	
 	
 	def connected
-		@polling_timer = periodic_timer(30) do
+		@polling_timer = schedule.every('30s') do
 			logger.debug "-- Polling Lighting"
 			set_mode(0, :priority => 99)		# We need to maintain the connection
 		end
@@ -23,7 +23,7 @@ class StrandVisionNet < Control::Device
 		# Disconnected may be called without calling connected
 		#	Hence the check if timer is nil here
 		#
-		@polling_timer.cancel unless @polling_timer.nil?
+		@polling_timer.unschedule unless @polling_timer.nil?
 		@polling_timer = nil
 	end
 	

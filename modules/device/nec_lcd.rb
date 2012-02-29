@@ -100,10 +100,13 @@ class NecLcd < Control::Device
 		volume_status(0)
 	end
 	
-	def power_on?
+	def power_on?(priority = 50)
 		type = :command
 		message = "01D6"
-		send_checksum(type, message, {:emit => :power})
+		send_checksum(type, message, {
+			:emit => :power,
+			:priority => priority
+		})
 	end
 	
 
@@ -304,15 +307,17 @@ class NecLcd < Control::Device
 	
 
 	def do_poll
-		send_checksum(:command, "01D6", {:priority => 99})	#power_on?	# avoid high priority
+		#send_checksum(:command, "01D6", {:priority => 99})	#power_on?	# avoid high priority
 		
-		power_on_delay
-		mute_status
-		volume_status
-		brightness_status
-		contrast_status
-		video_input
-		audio_input
+		if power_on?(99)
+			power_on_delay
+			mute_status
+			volume_status
+			brightness_status
+			contrast_status
+			video_input
+			audio_input
+		end
 	end
 
 

@@ -28,6 +28,7 @@ gem 'em-priority-queue'					# Command Queueing
 gem 'em-http-request'					# HTTP service support
 #gem 'em-resolv-replace'					# Evented DNS resolver (double resume with net/ldap)
 gem 'atomic'							# Atomic operations
+gem 'rufus-scheduler'					# Scheduled tasks
 
 
 #

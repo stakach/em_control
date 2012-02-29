@@ -77,7 +77,8 @@ class SharpLcd < Control::Device
 		#	Hence the check if timer is nil here
 		#
 		@poll_lock.synchronize {
-			@polling_timer.cancel unless @polling_timer.nil?
+			@polling_timer.unschedule unless @polling_timer.nil?
+			@polling_timer = nil
 		}
 	end
 	
@@ -247,7 +248,7 @@ class SharpLcd < Control::Device
 			do_poll
 			
 			@poll_lock.synchronize {
-				@polling_timer = periodic_timer(30) do
+				@polling_timer = schedule.every('30s') do
 					logger.debug "-- Polling Display"
 					do_poll unless self[:warming]
 				end

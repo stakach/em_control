@@ -34,14 +34,14 @@ class JvcMonitor < Control::Device
 	def connected
 		do_send('CN1')	# Connection command - initiate comms
 	
-		@polling_timer = periodic_timer(60) do
+		@polling_timer = schedule.every('60s') do
 			logger.debug "Polling JVC"
 			do_send('CN1')	# Connection command
 		end
 	end
 
 	def disconnected
-		@polling_timer.cancel unless @polling_timer.nil?
+		@polling_timer.unschedule unless @polling_timer.nil?
 		@polling_timer = nil
 	end
 	

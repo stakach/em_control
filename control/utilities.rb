@@ -16,39 +16,100 @@ module Control
 
 	end
 	
-	class TimerWrapper
-		def initialize(ref = nil, &block)
-			@reference = ref
-			@callback = block
+	class JobProxy
+		
+		instance_methods.each { |m| undef_method m unless m =~ /(^__|^send$|^object_id$)/ }
+		
+		def initialize(jobs, index, lock)
+			@jobs = jobs
+			@index = index
+			@job_lock = lock
+			@job = @jobs[@index]	# only ever called from within the lock
 		end
 		
-		def reference=(ref)
-			@reference = ref if @reference.nil?
+		
+		def unschedule
+			@job.unschedule
+			
+			@job_lock.synchronize {
+				@jobs.delete(@index)
+			}
 		end
 		
-		def interval
-			if @reference.respond_to?(:interval)
-				return @reference.interval
-			end
-			return nil
+		protected
+		
+		def method_missing(name, *args, &block)
+			@job.send(name, *args, &block)
+		end
+	end
+	
+	class ScheduleProxy
+		
+		instance_methods.each { |m| undef_method m unless m =~ /(^__|^send$|^object_id$)/ }
+		
+		def initialize
+			@jobs = {}
+			@index = 0
+			@job_lock = Mutex.new
 		end
 		
-		def interval=(time)
-			if @reference.respond_to?(:interval)
-				@reference.interval = time
-			end
+		def clear_jobs
+			@job_lock.synchronize {
+				@jobs.each_value do |job|
+					job.unschedule
+				end
+				
+				@jobs = {}
+				@index = 0
+			}
 		end
 		
-		def cancel
-			if @reference.present?
-				@reference.cancel
-				@reference = nil
+		protected
+		
+		def method_missing(name, *args, &block)
+			if block.present?
+				job = nil
+				
+				@job_lock.synchronize {
+					if [:in, :at].include?(name)
+						index = @index				# local variable for the block
+						
+						job = Control::scheduler.send(name, *args) do
+							begin
+								block.call
+							rescue => e
+								Control.print_error(System.logger, e, :message => "Error in one off scheduled event")
+							ensure
+								@job_lock.synchronize {
+									@jobs.delete(index)
+								}
+							end
+						end
+					else
+						job = Control::scheduler.send(name, *args) do
+							begin
+								block.call
+							rescue => e
+								Control.print_error(System.logger, e, :message => "Error in repeated scheduled event")
+							end
+						end
+					end
+					
+					if job.present?
+						@jobs[@index] = job
+						job = JobProxy.new(@jobs, @index, @job_lock)
+						
+						@index += 1
+						
+						return job
+					end
+				}
+				
+				return nil
+			else
+				return Control::scheduler.send(name, *args, &block)
 			end
-			if @callback.present?
-				@callback.call(self)
-				@callback = nil
-			end
-		end
+        end
 	end
 	
 	module Utilities
@@ -105,97 +166,11 @@ module Control
 		
 		
 		#
-		# runs an event every so many seconds
+		# Schedule events
 		#
-		def periodic_timer(time, &block)
-			timer = EM::PeriodicTimer.new(time) do
-				EM.defer do
-					begin
-						block.call
-					rescue => e
-						Control.print_error(System.logger, e, :message => "Error in periodic timer")
-					end
-				end
-			end
-			
-			#
-			# Check if we are an instance of device or logic
-			#
-			if (self.class.ancestors & [Control::Device, Control::Logic]).length > 0
-				@status_lock.synchronize {
-					@active_timers = @active_timers || [].extend(MonitorMixin)
-				}
-				
-				timer = TimerWrapper.new(timer) do |timer|
-					@active_timers.synchronize {
-						@active_timers.delete(timer)
-					}
-				end
-				
-				@active_timers.synchronize {
-					@active_timers << timer
-				}
-			end
-			return timer
-		end
-		
-		#
-		# Runs an event once after a particular amount of time
-		#
-		def one_shot(time, &block)
-			
-			#
-			# Check if we are tracking timers 
-			#
-			capture_timer = (self.class.ancestors & [Control::Device, Control::Logic]).length > 0
-			if capture_timer
-				timer = nil
-				@status_lock.synchronize {
-					@active_timers = @active_timers || [].extend(MonitorMixin)
-				}
-				
-				timer = TimerWrapper.new(timer) do |timer|
-					@active_timers.synchronize {
-						@active_timers.delete(timer)
-					}
-				end
-				
-				@active_timers.synchronize {
-					@active_timers << timer
-				}
-				
-				rem_proc = Proc.new  { |timer|
-					@active_timers.synchronize {
-						@active_timers.delete(timer)
-					}
-				}
-			end
-			
-			#
-			# Create the timer
-			#
-			ref = EM::Timer.new(time) do
-				EM.defer do
-					begin
-						rem_proc.call(timer) unless rem_proc.nil?
-						block.call
-					rescue => e
-						Control.print_error(System.logger, e, :message => "Error in one shot (or shutting down)")
-					end
-				end
-			end
-			
-			#
-			# return the reference
-			#
-			if timer.nil?
-				timer = ref
-			else
-				timer.reference = ref
-			end
-			
-			return timer
-		end
+		def schedule
+			@schedule ||= ScheduleProxy.new
+        end
 		
 		
 		#
@@ -206,8 +181,7 @@ module Control
 		module_function :str_to_array
 		module_function :array_to_str
 		
+		module_function :schedule
 		module_function :task
-		module_function :periodic_timer
-		module_function :one_shot
 	end
 end
