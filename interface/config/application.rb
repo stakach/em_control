@@ -46,7 +46,7 @@ module Interface
     config.assets.enabled = true
 
     # Version of your assets, change this if you want to expire all your assets
-    config.assets.version = '1.7'
+    config.assets.version = '1.8'
   end
 end
 
