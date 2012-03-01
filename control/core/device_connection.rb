@@ -127,19 +127,25 @@ module Control
 								
 								process = true
 								if command[:name].present?
-									name = command[:name]
-									@named_commands[name][0].pop				# Extract the command data
-									command = @named_commands[name][1]
-									
-									if @named_commands[name][0].empty?			# See if any more of these commands are queued
-										@named_commands.delete(name)	# Delete if there are not
-									else
-										@named_commands[name][1] = nil			# Reset if there are
-									end
-									
-									if command.nil?								# decide if to continue or not
-										command = {}
-										process = false
+									begin
+										name = command[:name]
+										@named_commands[name][0].pop				# Extract the command data
+										command = @named_commands[name][1]
+										
+										if @named_commands[name][0].empty?			# See if any more of these commands are queued
+											@named_commands.delete(name)	# Delete if there are not
+										else
+											@named_commands[name][1] = nil			# Reset if there are
+										end
+										
+										if command.nil?								# decide if to continue or not
+											command = {}
+											process = false
+										end
+									rescue
+										#
+										# Retry (pop empty, lets let it have it)
+										#
 									end
 								end
 								
