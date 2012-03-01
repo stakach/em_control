@@ -96,7 +96,7 @@ class SharpLcd < Control::Device
 		power_on? do |result|
 			if [On, "on", :on].include?(state)
 				if result == Off
-					do_send('POWR   1', :timeout => delay + 15)
+					do_send('POWR   1', {:timeout => delay + 15, :name => :power})
 					self[:warming] = true
 					self[:power] = On
 					logger.debug "-- Sharp LCD, requested to power on"
@@ -105,7 +105,7 @@ class SharpLcd < Control::Device
 				end
 			else
 				if result == On
-					do_send('POWR   0', :timeout => 15)
+					do_send('POWR   0', {:timeout => 15, :name => :power})
 					
 					self[:power] = Off
 					logger.debug "-- Sharp LCD, requested to power off"
@@ -143,7 +143,7 @@ class SharpLcd < Control::Device
 		input = input.to_sym if input.class == String
 		
 		#self[:target_input] = input
-		do_send(INPUTS[input], :timeout => 20)	# does an auto adjust on switch to vga
+		do_send(INPUTS[input], {:timeout => 20, :name => :input})	# does an auto adjust on switch to vga
 		video_input(0)	# high level command
 		brightness_status(60)		# higher status than polling commands - lower than input switching (vid then audio is common)
 		contrast_status(60)
@@ -163,7 +163,7 @@ class SharpLcd < Control::Device
 		input = input.to_sym if input.class == String
 		self[:audio] = input
 		
-		do_send(AUDIO[input])
+		do_send(AUDIO[input], :name => :audio)
 		mute_status(0)		# higher status than polling commands - lower than input switching
 		#volume_status(60)	# Mute response requests volume
 		

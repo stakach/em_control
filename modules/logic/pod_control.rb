@@ -29,8 +29,18 @@ class PodControl < Control::Logic
 		schedule.every('1h') do
 			update_help
 		end
-		schedule.cron('0 2 * * *') do 	# Every day at 2am
-			self[:display_refresh] = Time.now.to_i
+		schedule.cron('30 6 * * *') do 	# Every day at 6:30am
+			refresh
+		end
+		schedule.cron('30 7 * * 1-5') do 	# Every day (except weekends) at 7:30am - turn on pods
+			system[:Display].power_on? do |power|
+				if power == Off
+					select('in-house-pc')
+				end
+			end
+		end
+		schedule.cron('30 22 * * *') do 	# Every day at 10:30pm - turn off pods
+			system[:Display].power(Off)
 		end
 	end
 	
@@ -76,6 +86,14 @@ class PodControl < Control::Logic
 	end
 	
 	
+	#
+	# Reload the interface
+	#
+	def refresh
+		self[:display_refresh] = Time.now.to_i
+	end
+	
+	
 	def show_desktop
 		system[:Computer].launch_application('desktop')
 	end
@@ -111,8 +129,10 @@ class PodControl < Control::Logic
 						self[:set_default_laptop2] = false
 						default_display_config
 					end
+				when setting('share_display')
+					do_share(true) unless self[:share_display]
 				else
-					select('in-house-pc') unless self[:share_display]
+					select('in-house-pc')
 			end
 		end
 	end

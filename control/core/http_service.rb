@@ -84,6 +84,12 @@ module Control
 			@wait_queue = EM::Queue.new
 			@send_queue = EM::PriorityQueue.new(:fifo => true) {|x,y| x < y}	# regular priority
 			
+			#
+			# Named commands
+			#	Allowing for state control
+			#
+			@named_commands = {}
+			
 			
 			#
 			# Locks
@@ -144,17 +150,39 @@ module Control
 						if command != :shutdown
 							
 							begin
-								if command[:delay] > 0.0
-									delay = @last_sent_at + command[:delay] - Time.now.to_f
-									if delay > 0.0
-										EM.add_timer delay do
+								
+								process = true
+								if command[:name].present?
+									name = command[:name]
+									@named_commands[name][0].pop					# Extract the command data
+									command = @named_commands[name][1]
+									
+									if @named_commands[name][0].empty?			# See if any more of these commands are queued
+										@named_commands.delete(name)				# Delete if there are not
+									else
+										@named_commands[name][1] = nil			# Reset if there are
+									end
+									
+									if command.nil?											# decide if to continue or not
+										process = false
+									end
+								end
+								
+								if process
+									if command[:delay] > 0.0
+										delay = @last_sent_at + command[:delay] - Time.now.to_f
+										if delay > 0.0
+											EM.add_timer delay do
+												process_send(command)
+											end
+										else
 											process_send(command)
 										end
 									else
 										process_send(command)
 									end
 								else
-									process_send(command)
+									process_next_send
 								end
 							rescue => e
 								EM.defer do
@@ -446,6 +474,10 @@ module Control
 					options[:callback] = args[0] unless args.empty? || args[0].class != Proc
 					options[:callback] = block unless block.nil?
 				end
+				
+				if options[:name].present?
+					options[:name] = options[:name].to_sym
+				end
 			rescue => e
 				Control.print_error(logger, e, {
 					:message => "module #{@parent.class} in device_connection.rb, send : possible bad data or options hash",
@@ -472,7 +504,22 @@ module Control
 				if bonus
 					options[:priority] -= @config[:priority_bonus]
 				end
-				@send_queue.push(options, options[:priority])
+				
+				add = true
+				if options[:name].present?
+					name = options[:name]
+					if @named_commands[name].nil?
+						@named_commands[name] = [[options[:priority]], options]	#TODO:: we need to deal with the old commands emit values!
+					elsif @named_commands[name][0][-1] > options[:priority]
+						@named_commands[name][0].push(options[:priority])
+						@named_commands[name][1] = options						#TODO:: we need to deal with the old commands emit values!
+					else
+						@named_commands[name][1] = options						#TODO:: we need to deal with the old commands emit values!
+						add = false
+					end
+				end
+				
+				@send_queue.push(options, options[:priority]) if add
 			end
 				
 			return false

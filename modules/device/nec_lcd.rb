@@ -50,7 +50,7 @@ class NecLcd < Control::Device
 	def connected
 		do_poll
 	
-		@polling_timer = periodic_timer(30) do
+		@polling_timer = schedule.every('30s') do
 			logger.debug "-- Polling Display"
 			do_poll
 		end
@@ -61,7 +61,7 @@ class NecLcd < Control::Device
 		# Disconnected may be called without calling connected
 		#	Hence the check if timer is nil here
 		#
-		@polling_timer.cancel unless @polling_timer.nil?
+		@polling_timer.unschedule unless @polling_timer.nil?
 		@polling_timer = nil
 	end
 	
@@ -80,7 +80,7 @@ class NecLcd < Control::Device
 			#self[:power_target] = On
 			if !self[:power]
 				message += "0001"	# Power On
-				send_checksum(:command, message)
+				send_checksum(:command, message, {:name => :power})
 				self[:warming] = true
 				self[:power] = On
 				logger.debug "-- NEC LCD, requested to power on"
@@ -93,10 +93,14 @@ class NecLcd < Control::Device
 			#self[:power_target] = Off
 			if self[:power]
 				message += "0004"	# Power Off
-				send_checksum(:command, message)
+				send_checksum(:command, message, {:name => :power})
 				
 				self[:power] = Off
 				logger.debug "-- NEC LCD, requested to power off"
+				
+				type = :command
+				message = "01D6"				# Power status
+				send_checksum(type, message)	# Check power status
 			end
 		end
 		
@@ -142,7 +146,7 @@ class NecLcd < Control::Device
 		message = OPERATION_CODE[:video_input]
 		message += INPUTS[input].to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
-		send_checksum(type, message)
+		send_checksum(type, message, {:name => :input})
 		brightness_status(60)		# higher status than polling commands - lower than input switching
 		contrast_status(60)
 
@@ -165,7 +169,7 @@ class NecLcd < Control::Device
 		message = OPERATION_CODE[:audio_input]
 		message += AUDIO[input].to_s(16).upcase.rjust(4, '0')	# Value of input as a hex string
 		
-		send_checksum(type, message)
+		send_checksum(type, message, :name => :audio)
 		mute_status(60)		# higher status than polling commands - lower than input switching
 		volume_status(60)
 		

@@ -40,6 +40,11 @@ module Control
 			@wait_queue = EM::Queue.new
 			@send_queue = EM::PriorityQueue.new(:fifo => true) {|x,y| x < y} # regular priority
 			
+			#
+			# Named commands
+			#	Allowing for state control
+			#
+			@named_commands = {}
 			
 			#
 			# Locks
@@ -119,17 +124,40 @@ module Control
 					@send_queue.pop {|command|
 						if command != :shutdown
 							begin
-								if command[:delay] > 0.0
-									delay = @last_sent_at + command[:delay] - Time.now.to_f
-									if delay > 0.0
-										EM.add_timer delay do
+								
+								process = true
+								if command[:name].present?
+									name = command[:name]
+									@named_commands[name][0].pop				# Extract the command data
+									command = @named_commands[name][1]
+									
+									if @named_commands[name][0].empty?			# See if any more of these commands are queued
+										@named_commands.delete(name)	# Delete if there are not
+									else
+										@named_commands[name][1] = nil			# Reset if there are
+									end
+									
+									if command.nil?								# decide if to continue or not
+										command = {}
+										process = false
+									end
+								end
+								
+								if process
+									if command[:delay] > 0.0
+										delay = @last_sent_at + command[:delay] - Time.now.to_f
+										if delay > 0.0
+											EM.add_timer delay do
+												process_send(command)
+											end
+										else
 											process_send(command)
 										end
 									else
 										process_send(command)
 									end
 								else
-									process_send(command)
+									process_next_send(command)
 								end
 							rescue => e
 								EM.defer do
@@ -454,13 +482,17 @@ module Control
 				elsif options[:hex_string] == true
 					data = hex_to_byte(data)
 				end
-
+				
 				options[:data] = data
 				options[:retries] = 0 if options[:wait] == false
 				
 				if options[:callback].nil? && (args.length > 0 || block.present?)
 					options[:callback] = args[0] unless args.empty? || args[0].class != Proc
 					options[:callback] = block unless block.nil?
+				end
+				
+				if options[:name].present?
+					options[:name] = options[:name].to_sym
 				end
 			rescue => e
 				Control.print_error(logger, e, {
@@ -520,7 +552,22 @@ module Control
 							return	# Don't add to queue yet
 						end
 					end
-					@send_queue.push(command, command[:priority])
+					
+					add = true
+					if command[:name].present?
+						name = command[:name]
+						if @named_commands[name].nil?
+							@named_commands[name] = [[command[:priority]], command]	#TODO:: we need to deal with the old commands emit values!
+						elsif @named_commands[name][0][-1] > command[:priority]
+							@named_commands[name][0].push(command[:priority])
+							@named_commands[name][1] = command						#TODO:: we need to deal with the old commands emit values!
+						else
+							@named_commands[name][1] = command						#TODO:: we need to deal with the old commands emit values!
+							add = false
+						end
+					end
+					
+					@send_queue.push(command, command[:priority]) if add
 				end
 			rescue => e
 				EM.defer do
