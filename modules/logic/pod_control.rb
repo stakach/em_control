@@ -153,7 +153,11 @@ class PodControl < Control::Logic
 	def do_share(value)
 		self[:sharing_avaliable] = true
 		if value == true && self[:share_display] == false
-			self[:old_input] = self[:input]
+			if self[:input].nil? || self[:input] == 'sharing_input'
+				self[:old_input] = 'in-house-pc'
+			else
+				self[:old_input] = self[:input]
+			end
 			self[:share_display] = true
 			select('sharing_input')
 			system[:Display].mute
