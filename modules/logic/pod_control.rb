@@ -129,7 +129,7 @@ class PodControl < Control::Logic
 						self[:set_default_laptop2] = false
 						default_display_config
 					end
-				when setting('share_display')
+				when setting('sharing_input')
 					do_share(true) unless self[:share_display]
 				else
 					select('in-house-pc')
