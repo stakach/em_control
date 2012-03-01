@@ -76,36 +76,29 @@ class NecLcd < Control::Device
 	def power(state)
 		message = "C203D6"
 		
-		if [On, "on", :on].include?(state)
-			#self[:power_target] = On
-			if !self[:power]
-				message += "0001"	# Power On
-				send_checksum(:command, message, {:name => :power})
-				self[:warming] = true
-				self[:power] = On
-				logger.debug "-- NEC LCD, requested to power on"
-				
-				type = :command
-				message = "01D6"				# Power status
-				send_checksum(type, message)	# Check power status
-			end
-		else
-			#self[:power_target] = Off
-			if self[:power]
-				message += "0004"	# Power Off
-				send_checksum(:command, message, {:name => :power})
-				
-				self[:power] = Off
-				logger.debug "-- NEC LCD, requested to power off"
-				
-				type = :command
-				message = "01D6"				# Power status
-				send_checksum(type, message)	# Check power status
+		power_on? do |result|
+			if [On, "on", :on].include?(state)
+				if result == Off
+					message += "0001"	# Power On
+					send_checksum(:command, message, {:name => :power})
+					self[:warming] = true
+					self[:power] = On
+					logger.debug "-- NEC LCD, requested to power on"
+					
+					power_on_delay
+					mute_status(0)
+					volume_status(0)
+				end
+			else
+				if result == On
+					message += "0004"	# Power Off
+					send_checksum(:command, message, {:name => :power})
+					
+					self[:power] = Off
+					logger.debug "-- NEC LCD, requested to power off"
+				end
 			end
 		end
-		
-		mute_status(0)
-		volume_status(0)
 	end
 	
 	def power_on?(priority = 50, &block)
@@ -315,9 +308,6 @@ class NecLcd < Control::Device
 	
 
 	def do_poll
-		#send_checksum(:command, "01D6", {:priority => 99})	#power_on?	# avoid high priority
-		
-		power_on_delay
 		power_on?(99) do |result|
 			if result == On
 				mute_status
@@ -328,6 +318,7 @@ class NecLcd < Control::Device
 				audio_input
 			end
 		end
+		power_on_delay
 	end
 
 
@@ -376,10 +367,11 @@ class NecLcd < Control::Device
 			when :power_on_delay
 				if value > 0
 					self[:warming] = true
-					sleep(value)		# Prevent any commands being sent until the power on delay is complete
-					power_on_delay
+					schedule.in("#{value}s") do		# Prevent any commands being sent until the power on delay is complete
+						power_on_delay
+					end
 				else
-					schedule.in('6s') do		# Reactive the interface once the display is online
+					schedule.in('3s') do		# Reactive the interface once the display is online
 						self[:warming] = false	# allow access to the display
 					end
 				end
