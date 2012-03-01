@@ -182,8 +182,8 @@ class PodControl < Control::Logic
 	
 	def default_display_config
 		logger.debug "Pod Control: setting default display values"
-		system[:Display].brightness(system[:Display][:brightness_max] / 2)
-		system[:Display].contrast(system[:Display][:contrast_max] / 2)
+		system[:Display].brightness(system[:Display][:brightness_max] / 2) unless system[:Display][:brightness_max].nil?
+		system[:Display].contrast(system[:Display][:contrast_max] / 2) unless system[:Display][:contrast_max].nil?
 	end
 	
 	
