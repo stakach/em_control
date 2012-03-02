@@ -101,7 +101,10 @@ class Communicator
 			end
 			
 			system = sys.nil? ? nil : sys.name.to_sym
-			return nil if System[system].nil?
+			if System[system].nil?
+				interface.shutdown	#kill comms
+				return nil
+			end
 			
 			System.logger.debug "-- Interface #{interface.class} selected system #{system}"
 			return System[system].communicator.attach(interface)

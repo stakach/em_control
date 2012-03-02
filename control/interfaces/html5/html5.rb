@@ -82,14 +82,15 @@ class HTML5Monitor
 			
 			#
 			# Prevent DOS/brute force Attacks
-			# TODO:: @data_lock.synchronize {
 			#
 			@ignoreAuth = true
 			scheduler.in '2s' do
 				begin
 					@socket.send(JSON.generate({:event => "authenticate", :data => []}))
 				ensure
-					@ignoreAuth = false
+					@data_lock.synchronize {
+						@ignoreAuth = false
+					}
 				end
 			end
 		end
@@ -106,7 +107,9 @@ class HTML5Monitor
 			begin
 				@socket.send(JSON.generate({:event => "system", :data => []}))
 			ensure
-				@ignoreSys = false
+				@data_lock.synchronize {
+					@ignoreSys = false
+				}
 			end
 		end
 	end
@@ -197,7 +200,7 @@ class HTML5Monitor
 	rescue => e
 		logger = nil
 		@data_lock.synchronize {
-			logger = @system.nil? ? logger = Control::System.logger : @system.logger
+			logger = @system.nil? ? Control::System.logger : @system.logger
 		}
 		Control.print_error(logger, e, {
 			:message => "in html5.rb, recieve : probably malformed JSON data",
