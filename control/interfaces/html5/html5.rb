@@ -1,4 +1,3 @@
-
 require 'em-websocket'
 require 'json'
 
@@ -83,9 +82,10 @@ class HTML5Monitor
 			
 			#
 			# Prevent DOS/brute force Attacks
+			# TODO:: @data_lock.synchronize {
 			#
 			@ignoreAuth = true
-			EventMachine::Timer.new(5) do
+			scheduler.in '2s' do
 				begin
 					@socket.send(JSON.generate({:event => "authenticate", :data => []}))
 				ensure
@@ -97,10 +97,12 @@ class HTML5Monitor
 	end
 	
 	def send_system
-		return if @ignoreSys
-		
-		@ignoreSys = true
-		EventMachine::Timer.new(5) do
+		@data_lock.synchronize {
+			return if @ignoreSys
+			
+			@ignoreSys = true
+		}
+		scheduler.in '2s' do
 			begin
 				@socket.send(JSON.generate({:event => "system", :data => []}))
 			ensure
