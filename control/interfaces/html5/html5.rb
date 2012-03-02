@@ -84,7 +84,7 @@ class HTML5Monitor
 			# Prevent DOS/brute force Attacks
 			#
 			@ignoreAuth = true
-			scheduler.in '2s' do
+			Control.scheduler.in '2s' do
 				begin
 					@socket.send(JSON.generate({:event => "authenticate", :data => []}))
 				ensure
@@ -98,12 +98,10 @@ class HTML5Monitor
 	end
 	
 	def send_system
-		@data_lock.synchronize {
-			return if @ignoreSys
-			
-			@ignoreSys = true
-		}
-		scheduler.in '2s' do
+		return if @ignoreSys	
+		@ignoreSys = true
+		
+		Control.scheduler.in '2s' do
 			begin
 				@socket.send(JSON.generate({:event => "system", :data => []}))
 			ensure
