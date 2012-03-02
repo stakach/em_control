@@ -297,7 +297,7 @@ class Communicator
 	
 	def attach(interface)
 		@status_lock.synchronize {
-			return nil if @shutdown
+			return nil if @shutdown || interface.nil?
 			@connected_interfaces[interface] = [] unless @connected_interfaces.include?(interface)
 		}
 		return self
