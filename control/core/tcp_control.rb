@@ -175,6 +175,10 @@ module Control
 										logger.info "module #{@parent.class} in tcp_control.rb, unbind"
 										logger.info "Reconnect failed for #{settings.ip}:#{settings.port}"
 									end
+								else
+									EM.defer do
+										logger.debug "module #{@parent.class}:#{settings.ip}:#{settings.port} reconnect failed: #{connect_retry.value}"
+									end
 								end		
 				
 								do_reconnect(settings)
