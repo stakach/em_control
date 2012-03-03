@@ -194,25 +194,23 @@ module Control
 			end
 			
 			def do_reconnect(settings)
-				EM.add_timer 5, proc {
-					EM.defer do
-						if !@shutting_down.value
-							begin
-								#
-								# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
-								# => Use the non-blocking resolver in the future
-								#
-								ip = Addrinfo.tcp(settings.ip, 80).ip_address
-								EM.next_tick do
-									reconnect ip, settings.port
-								end
-								#reconnect Addrinfo.tcp(settings.ip, 80).ip_address, settings.port
-							rescue
-								do_reconnect(settings)
+				Control.scheduler.in '5s' do
+					if !@shutting_down.value
+						begin
+							#
+							# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
+							# => Use the non-blocking resolver in the future
+							#
+							ip = Addrinfo.tcp(settings.ip, 80).ip_address
+							EM.next_tick do
+								reconnect ip, settings.port
 							end
+							#reconnect Addrinfo.tcp(settings.ip, 80).ip_address, settings.port
+							rescue
+							do_reconnect(settings)
 						end
 					end
-				}
+				end
 			end
 			
 			def receive_data(data)
