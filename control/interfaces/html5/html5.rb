@@ -220,7 +220,7 @@ class HTML5Monitor
 end
 
 
-EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket|
+EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81, :debug => true) do |socket|
 	
 	
 	socket.onopen {
