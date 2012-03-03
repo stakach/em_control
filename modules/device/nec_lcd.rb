@@ -310,6 +310,7 @@ class NecLcd < Control::Device
 	def do_poll
 		power_on?(99) do |result|
 			if result == On
+				power_on_delay
 				mute_status
 				volume_status
 				brightness_status
@@ -318,7 +319,6 @@ class NecLcd < Control::Device
 				audio_input
 			end
 		end
-		power_on_delay
 	end
 
 
