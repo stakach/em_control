@@ -1,4 +1,3 @@
-
 #
 # There should be one communicator per system that handles the interface interfaces
 #	This will pass on registered status requirements and call functions as requested
@@ -139,46 +138,51 @@ class Communicator
 		mod_sym = mod.class == String ? mod.to_sym : mod	# remember the symbol used by the interface to reference this module
 		status = status.to_sym if status.class == String
 		
-		mod = @system.modules[mod_sym].instance	# most efficient
-
-		theVal = nil
-		@status_lock.synchronize {
-			@status_register[mod] ||= {}
-			@status_register[mod][status] ||= {}
-			@status_register[mod][status][interface] = mod_sym
-			@connected_interfaces[interface] << @status_register[mod][status] unless @connected_interfaces[interface].nil?
-			theVal = mod[status]
-		}
-		
-		mod.add_observer(self)
-		logger.debug "-- Interface #{interface.class} registered #{mod_sym}:#{status}"
-		
-		#
-		# Send the status to this requestor!
-		#	This is the same as in update
-		#
-		if !theVal.nil?
-			begin
-				function = "#{mod_sym.to_s.downcase}_#{status}_changed".to_sym
-				
-				if interface.respond_to?(function)
-					interface.__send__(function, theVal)
-				else
-					interface.notify(mod_sym, status, theVal)
+		if @system.modules[mod_sym].present?
+			mod = @system.modules[mod_sym].instance	# most efficient
+	
+			theVal = nil
+			@status_lock.synchronize {
+				@status_register[mod] ||= {}
+				@status_register[mod][status] ||= {}
+				@status_register[mod][status][interface] = mod_sym
+				@connected_interfaces[interface] << @status_register[mod][status] unless @connected_interfaces[interface].nil?
+				theVal = mod[status]
+			}
+			
+			mod.add_observer(self)
+			logger.debug "-- Interface #{interface.class} registered #{mod_sym}:#{status}"
+			
+			#
+			# Send the status to this requestor!
+			#	This is the same as in update
+			#
+			if !theVal.nil?
+				begin
+					function = "#{mod_sym.to_s.downcase}_#{status}_changed".to_sym
+					
+					if interface.respond_to?(function)
+						interface.__send__(function, theVal)
+					else
+						interface.notify(mod_sym, status, theVal)
+					end
+				rescue => e
+					Control.print_error(logger, e, {
+						:message => "in communicator.rb, register : bad interface or user module code",
+						:level => Logger::ERROR
+					})
 				end
-			rescue => e
-				Control.print_error(logger, e, {
-					:message => "in communicator.rb, register : bad interface or user module code",
-					:level => Logger::ERROR
-				})
 			end
+		else
+			logger.warn "in communicator.rb, register : #{interface.class} called register on a bad module name"
+			block.call() unless block.nil?	# Block will inform of any errors
 		end
 	rescue => e
-		Control.print_error(logger, e, {
-			:message => "in communicator.rb, register : #{interface.class} called register on a bad module name",
-			:level => Logger::WARN
-		})
 		begin
+			Control.print_error(logger, e, {
+				:message => "in communicator.rb, register : #{interface.class} failed to register #{mod.inspect}.#{status.inspect}",
+				:level => Logger::ERROR
+			})
 			block.call() unless block.nil?	# Block will inform of any errors
 		rescue => x
 			Control.print_error(logger, x, {
