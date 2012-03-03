@@ -177,7 +177,7 @@ module Control
 									end
 								else
 									EM.defer do
-										logger.debug "module #{@parent.class}:#{settings.ip}:#{settings.port} reconnect failed: #{connect_retry.value}"
+										logger.debug "module #{@parent.class}:#{settings.ip}:#{settings.port} reconnect failed: #{@connect_retry.value}"
 									end
 								end		
 				
