@@ -11,7 +11,6 @@ require 'json'
 
 class HTML5Monitor
 	@@clients = {}
-	@@client_lock = Mutex.new
 	@@special_events = {
 		"system" => :system,
 		"authenticate" => :authenticate,
@@ -24,30 +23,58 @@ class HTML5Monitor
 	}
 
 	def self.register(id)
-		@@client_lock.synchronize {
-			@@clients[id] = HTML5Monitor.new(id)
-		}
+		@@clients[id] = HTML5Monitor.new(id)
 	end
 	
 	def self.unregister(id)
-		@@client_lock.synchronize {
-			client = @@clients.delete(id)
-			client.disconnected
-		}
+		client = @@clients.delete(id)
+		
+		EM.defer do
+			begin
+				client.disconnected
+				Control::System.logger.debug "There are now #{HTML5Monitor.count} HTML5 clients connected"
+			rescue => e
+				Control.print_error(Control::System.logger, e, {
+					:message => "in html5.rb, onclose : unregistering client did not exist (we may have been shutting down)",
+					:level => Logger::ERROR
+				})
+			end
+		end
 	end
 	
 	def self.count
-		@@client_lock.synchronize {
-			return @@clients.length
-		}
+		return @@clients.length
 	end
 	
 	def self.receive(id, data)
-		client = nil
-		@@client_lock.synchronize {
-			client = @@clients[id]
-		}
-		client.receive(data)
+		client = @@clients[id]
+		
+		EM.defer do
+			begin
+				client.receive(data)
+			rescue => e
+				Control.print_error(Control::System.logger, e, {
+					:message => "in html5.rb, onmessage : client did not exist (we may have been shutting down)",
+					:level => Logger::ERROR
+				})
+			ensure
+				ActiveRecord::Base.clear_active_connections!	# Clear any unused connections
+			end
+		end
+	end
+	
+	
+	def initialize(socket)
+		@data_lock = Mutex.new
+		
+		#
+		# Must authenticate before any system details will be sent
+		#
+		@socket = socket
+		@system = nil
+		@user = nil
+		
+		@socket.send(JSON.generate({:event => "authenticate", :data => []}))
 	end
 	
 	
@@ -110,24 +137,6 @@ class HTML5Monitor
 				}
 			end
 		end
-	end
-
-
-	#
-	# The core communication functions
-	#
-	def initialize(socket)
-		@data_lock = Mutex.new
-		
-		#
-		# Must authenticate before any system details will be sent
-		#
-		@data_lock.synchronize {
-			@socket = socket
-			@system = nil
-			@user = nil
-			try_auth	# will not be authenticated here
-		}
 	end
 	
 	def disconnected
@@ -227,51 +236,19 @@ EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81, :debug => true) d
 		#
 		# This socket represents a connected device
 		#
-		id = socket
-		
-		EM.defer do
-			begin
-				HTML5Monitor.register(id)
-				Control::System.logger.debug 'HTML5 browser connected'
-			rescue => e
-				Control.print_error(Control::System.logger, e, {
-					:message => "in html5.rb, onopen in register : client could not be joined",
-					:level => Logger::ERROR
-				})
-			end
-		end
+		HTML5Monitor.register(socket)
+
 		
 		socket.onmessage { |data|
 			#
 			# Attach socket here to system
 			#	then process commands
 			#
-			EM.defer do
-				begin
-					HTML5Monitor.receive(id, data)
-				rescue => e
-					Control.print_error(Control::System.logger, e, {
-						:message => "in html5.rb, onmessage : client did not exist (we may have been shutting down)",
-						:level => Logger::ERROR
-					})
-				ensure
-					ActiveRecord::Base.clear_active_connections!	# Clear any unused connections
-				end
-			end
+			HTML5Monitor.receive(socket, data)
 		}
 
 		socket.onclose {
-			EM.defer do
-				begin
-					HTML5Monitor.unregister(id)
-					Control::System.logger.debug "There are now #{HTML5Monitor.count} HTML5 clients connected"
-				rescue => e
-					Control.print_error(Control::System.logger, e, {
-						:message => "in html5.rb, onclose : unregistering client did not exist (we may have been shutting down)",
-						:level => Logger::ERROR
-					})
-				end
-			end
+			HTML5Monitor.unregister(socket)
 		}
 		
 		socket.onerror { |error|
