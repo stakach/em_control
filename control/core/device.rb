@@ -55,7 +55,7 @@ module Control
 		# Configuration and settings
 		#		
 		def setting(name)
-			val = config.settings.where("name = ?", name.to_s).first || config.zones.settings.where("name = ?", name.to_s).first || config.dependency.settings.where("name = ?", name.to_s).first
+			val = config.settings.where("name = ?", name.to_s).first || config.control_system.zones.first.settings.where("name = ?", name.to_s).first || config.dependency.settings.where("name = ?", name.to_s).first
 			
 			if !val.nil?
 				case val.value_type
