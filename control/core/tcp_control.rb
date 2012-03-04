@@ -152,9 +152,14 @@ module Control
 									# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
 									# => Use the non-blocking resolver in the future
 									#
-									ip = Addrinfo.tcp(settings.ip, 80).ip_address
 									EM.next_tick do
-										reconnect ip, settings.port
+										begin
+											ip = Addrinfo.tcp(settings.ip, 80).ip_address
+											reconnect ip, settings.port
+										rescue
+											@connect_retry.value = 2
+											do_reconnect(settings) unless makebreak
+										end
 									end
 									@connect_retry.update { |v| v += 1}
 								rescue
@@ -198,19 +203,21 @@ module Control
 			end
 			
 			def do_reconnect(settings)
-				Control.scheduler.in '5s' do
+				#Control.scheduler.in '5s' do
+				EM::Timer.new(5) do
 					if !@shutting_down.value
 						begin
 							#
 							# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
 							# => Use the non-blocking resolver in the future
 							#
-							ip = Addrinfo.tcp(settings.ip, 80).ip_address
-							EM.next_tick do
+							#ip = Addrinfo.tcp(settings.ip, 80).ip_address
+							#EM.next_tick do
+								ip = Addrinfo.tcp(settings.ip, 80).ip_address
 								reconnect ip, settings.port
-							end
+							#end
 							#reconnect Addrinfo.tcp(settings.ip, 80).ip_address, settings.port
-							rescue
+						rescue
 							do_reconnect(settings)
 						end
 					end

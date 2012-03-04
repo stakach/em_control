@@ -94,6 +94,7 @@ module Control
 			@@scheduler = Rufus::Scheduler.start_new
 			
 			System.logger.debug "Started with #{EM.get_max_timers} timers avaliable"
+			System.logger.debug "Started with #{EM.threadpool_size} threads in pool"
 			
 			#
 			# Start the UDP server
