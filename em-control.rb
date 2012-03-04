@@ -16,13 +16,14 @@ require 'rubygems'
 require 'eventmachine'
 require 'em-priority-queue'
 require 'em-http'
-#require 'em-resolv-replace'
 require 'rufus/scheduler'
+require 'ipaddress'
 
 
 #
 # Library Files
 #
+require File.dirname(__FILE__) + './dns.rb'
 require File.dirname(__FILE__) + '/control/constants.rb'
 require File.dirname(__FILE__) + '/control/utilities.rb'
 require File.dirname(__FILE__) + '/control/priority_queue.rb'
@@ -47,6 +48,11 @@ module Control
 	
 	def self.scheduler
 		@@scheduler
+	end
+	
+	
+	def self.resolver
+		@@resolver
 	end
 	
 	
@@ -86,12 +92,13 @@ module Control
 		}
 	end
 	
-	def self.start
+	def self.start		
 		EventMachine.run do
 			#
 			# Enable the scheduling system
 			#
 			@@scheduler = Rufus::Scheduler.start_new
+			@@resolver = EM::P::AsyncResolver.new
 			
 			System.logger.debug "Started with #{EM.get_max_timers} timers avaliable"
 			System.logger.debug "Started with #{EM.threadpool_size} threads in pool"

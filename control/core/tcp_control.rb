@@ -146,50 +146,55 @@ module Control
 						begin
 							settings = DeviceModule.lookup(@parent)	#.reload # Don't reload here (user driven)
 							
+							@connect_retry.update { |v| v += 1}
+							
 							if @connect_retry.value == 0 || makebreak
-								begin
-									#
-									# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
-									# => Use the non-blocking resolver in the future
-									#
-									ip = Addrinfo.tcp(settings.ip, 80).ip_address
-									EM.next_tick do
-										reconnect ip, settings.port
+								if IPAddress.valid? settings.ip
+									EM.schedule do
+										reconnect settings.ip, settings.port
 									end
-									@connect_retry.update { |v| v += 1}
-								rescue
-									@connect_retry.value = 2
-									EM.defer do
-										logger.info "module #{@parent.class} in tcp_control.rb, unbind"
-										logger.info "Reconnect failed for #{settings.ip}:#{settings.port}"
+								else
+									error = Proc.new { |err|
+										EM.defer do
+											@connect_retry.value = 2
+											
+											logger.info "module #{@parent.class} in tcp_control.rb, unbind"
+											logger.info "Reconnect failed for #{settings.ip}:#{settings.port} - #{err.inspect}"
+											
+											do_reconnect(settings) unless makebreak
+										end
+									}
+									EM.schedule do
+										df = Control.resolver.query_async(settings.ip)
+										df.callback {|msg|
+											if !msg.answer.empty?
+												reconnect msg.answer[0].address.to_s, settings.port
+											else
+												error.call('not found')
+											end
+										}
+										df.errback &error
 									end
-									do_reconnect(settings) unless makebreak
 								end
+								
 							else
-								@connect_retry.update { |v| v += 1}
 								#
 								# log this once if had to retry more than once
 								#
 								if @connect_retry.value == 2
-									EM.defer do
-										logger.info "module #{@parent.class} in tcp_control.rb, unbind"
-										logger.info "Reconnect failed for #{settings.ip}:#{settings.port}"
-									end
+									logger.info "module #{@parent.class} in tcp_control.rb, unbind"
+									logger.info "Reconnect failed for #{settings.ip}:#{settings.port}"
 								else
-									EM.defer do
-										logger.debug "module #{@parent.class}:#{settings.ip}:#{settings.port} reconnect failed: #{@connect_retry.value}"
-									end
-								end		
+									logger.debug "module #{@parent.class}:#{settings.ip}:#{settings.port} reconnect failed: #{@connect_retry.value}"
+								end
 				
 								do_reconnect(settings)
 							end
 						rescue
-							EM.defer do
-								Control.print_error(logger, e, {
-									:message => "module #{@parent.class} in tcp_control.rb, unbind\nFailed to lookup settings. Device probably going offline.",
-									:level => Logger::FATAL
-								})
-							end
+							Control.print_error(logger, e, {
+								:message => "module #{@parent.class} in tcp_control.rb, unbind\nFailed to lookup settings. Device probably going offline.",
+								:level => Logger::FATAL
+							})
 							
 							# Do not attempt to reconnect this device!
 						end
@@ -198,21 +203,20 @@ module Control
 			end
 			
 			def do_reconnect(settings)
-				Control.scheduler.in '5s' do
+				EM::Timer.new(5) do
 					if !@shutting_down.value
-						begin
-							#
-							# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
-							# => Use the non-blocking resolver in the future
-							#
-							ip = Addrinfo.tcp(settings.ip, 80).ip_address
-							EM.next_tick do
-								reconnect ip, settings.port
-							end
-							#reconnect Addrinfo.tcp(settings.ip, 80).ip_address, settings.port
-							rescue
+						error = Proc.new { |err|
 							do_reconnect(settings)
-						end
+						}
+						df = Control.resolver.query_async(settings.ip)
+						df.callback {|msg|
+							if !msg.answer.empty?
+								reconnect msg.answer[0].address.to_s, settings.port
+							else
+								error.call('not found')
+							end
+						}
+						df.errback &error
 					end
 				end
 			end
