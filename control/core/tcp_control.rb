@@ -150,9 +150,9 @@ module Control
 							
 							if @connect_retry.value == 0 || makebreak
 								if IPAddress.valid? settings.ip
-									#EM.schedule do
+									EM.schedule do
 										reconnect settings.ip, settings.port
-									#end
+									end
 								else
 									error = Proc.new { |err|
 										EM.defer do
@@ -164,7 +164,7 @@ module Control
 											do_reconnect(settings) unless makebreak
 										end
 									}
-									#EM.schedule do
+									EM.schedule do
 										df = Control.resolver.query_async(settings.ip)
 										df.callback {|msg|
 											if !msg.answer.empty?
@@ -174,7 +174,7 @@ module Control
 											end
 										}
 										df.errback &error
-									#end
+									end
 								end
 								
 							else
@@ -203,25 +203,23 @@ module Control
 			end
 			
 			def do_reconnect(settings)
-				EM::Timer.new(5) do
+				EM::Timer.new(15) do
 					if !@shutting_down.value
-						EM.defer do
-							if IPAddress.valid? settings.ip
-								reconnect settings.ip, settings.port
-							else
-								error = Proc.new { |err|
-									do_reconnect(settings)
-								}
-								df = Control.resolver.query_async(settings.ip)
-								df.callback {|msg|
-									if !msg.answer.empty?
-										reconnect msg.answer[0].address.to_s, settings.port
-									else
-										error.call('not found')
-									end
-								}
-								df.errback &error
-							end
+						if IPAddress.valid? settings.ip
+							reconnect settings.ip, settings.port
+						else
+							error = Proc.new { |err|
+								do_reconnect(settings)
+							}
+							df = Control.resolver.query_async(settings.ip)
+							df.callback {|msg|
+								if !msg.answer.empty?
+									reconnect msg.answer[0].address.to_s, settings.port
+								else
+									error.call('not found')
+								end
+							}
+							df.errback &error
 						end
 					end
 				end
