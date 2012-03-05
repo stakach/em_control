@@ -244,6 +244,7 @@ end
 
 module Control
 	class System
+		@@socket_server = nil
 		def self.start_websockets
 			EM.schedule do
 				if @@socket_server.nil?
