@@ -38,6 +38,7 @@ require File.dirname(__FILE__) + '/control/core/device_connection.rb'
 require File.dirname(__FILE__) + '/control/core/datagram_server.rb'
 require File.dirname(__FILE__) + '/control/core/tcp_control.rb'
 require File.dirname(__FILE__) + '/control/core/http_service.rb'
+require File.dirname(__FILE__) + '/control/interfaces/html5/html5.rb'
 
 
 module Control
@@ -129,7 +130,7 @@ module Control
 			#
 			#require ROOT_DIR + '/control/interfaces/telnet/telnet.rb'	Insecure
 			#TelnetServer.start
-			require ROOT_DIR + '/control/interfaces/html5/html5.rb'
+			
 			
 			
 			#
@@ -138,6 +139,11 @@ module Control
 			@@scheduler.every '10s' do
 				System.logger.info "There are #{EM.connection_count} connections to this server"
 			end
+			
+			#
+			# Start server
+			#
+			System.start_websockets
 		end
 	end
 end

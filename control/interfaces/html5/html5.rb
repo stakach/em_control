@@ -229,44 +229,68 @@ class HTML5Monitor
 end
 
 
-EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81, :debug => true) do |socket|
-	
-	
-	socket.onopen {
-		#
-		# This socket represents a connected device
-		#
-		HTML5Monitor.register(socket)
-
+module Control
+	class System
 		
-		socket.onmessage { |data|
-			#
-			# Attach socket here to system
-			#	then process commands
-			#
-			HTML5Monitor.receive(socket, data)
-		}
-
-		socket.onclose {
-			HTML5Monitor.unregister(socket)
-		}
+		def self.socket_server=(server)
+			@@god_lock.synchronize {
+				@@socket_server = server
+			}
+		end
 		
-		socket.onerror { |error|
-			if !error.kind_of?(EM::WebSocket::WebSocketError)
-				EM.defer do
-					Control.print_error(Control::System.logger, error, {
-						:message => "in html5.rb, onerror : issue with websocket data",
-						:level => Logger::ERROR
-					})
-				end
-			else
-				EM.defer do
-					Control::System.logger.info "in html5.rb, onerror : invalid handshake received - #{error.inspect}"
-				end
+		def self.socket_server
+			@@god_lock.synchronize {
+				@@socket_server
+			}
+		end
+
+		def self.start_websockets
+			System.socket_server = EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket| # , :debug => true
+				
+				
+				socket.onopen {
+					#
+					# This socket represents a connected device
+					#
+					HTML5Monitor.register(socket)
+			
+					
+					socket.onmessage { |data|
+						#
+						# Attach socket here to system
+						#	then process commands
+						#
+						HTML5Monitor.receive(socket, data)
+					}
+			
+					socket.onclose {
+						HTML5Monitor.unregister(socket)
+					}
+					
+					socket.onerror { |error|
+						if !error.kind_of?(EM::WebSocket::WebSocketError)
+							EM.defer do
+								Control.print_error(Control::System.logger, error, {
+									:message => "in html5.rb, onerror : issue with websocket data",
+									:level => Logger::ERROR
+								})
+							end
+						else
+							EM.defer do
+								Control::System.logger.info "in html5.rb, onerror : invalid handshake received - #{error.inspect}"
+							end
+						end
+					}
+				}
+			
 			end
-		}
-	}
-
+			
+			Control::System.logger.info 'running HTML5 socket server on port 81'
+		end
+		
+		def self.stop_websockets
+			EventMachine::stop_server(System.socket_server)
+		end
+	
+	end
 end
-
-Control::System.logger.info 'running HTML5 socket server on port 81'
