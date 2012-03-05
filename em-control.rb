@@ -5,7 +5,7 @@ require 'observer'
 require 'yaml'
 require 'thread'
 require 'monitor'
-require 'Socket'	# for DNS lookups (EM isn't every good at this)
+require 'Socket'	# for DNS lookups 
 require 'Logger'
 
 
@@ -144,29 +144,9 @@ module Control
 			#
 			# Start server
 			#
-			System.start_websockets
-			EventMachine.add_periodic_timer(30) {
-				begin
-					System.stop_websockets
-				rescue => e
-					EM.defer do
-						Control.print_error(Control::System.logger, e, {
-							:message => "Failed to stop websocket",
-							:level => Logger::FATAL
-						})
-					end
-				end
-				begin
-					System.start_websockets
-				rescue => e
-					EM.defer do
-						Control.print_error(Control::System.logger, e, {
-							:message => "Failed to start websocket",
-							:level => Logger::FATAL
-						})
-					end
-				end
-			}
+			EM.add_timer(40)
+				System.start_websockets
+			end
 		end
 	end
 end
