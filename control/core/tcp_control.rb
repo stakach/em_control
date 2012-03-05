@@ -156,7 +156,7 @@ module Control
 								res.errback {|error|
 									EM.defer do
 										logger.info "module #{@parent.class} in tcp_control.rb, unbind"
-										logger.info "Reconnect failed for #{settings.ip}:#{settings.port} - #{err.inspect}"
+										logger.info "Reconnect failed for #{settings.ip}:#{settings.port} - #{error.inspect}"
 									end
 									@connect_retry.value = 2
 									do_reconnect(settings) unless makebreak
