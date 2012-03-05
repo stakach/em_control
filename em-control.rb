@@ -144,6 +144,16 @@ module Control
 			# Start server
 			#
 			System.start_websockets
+			EventMachine.add_periodic_timer(30) {
+				begin
+					System.stop_websockets
+				rescue
+				end
+				begin
+					System.start_websockets
+				rescue
+				end
+			}
 		end
 	end
 end
