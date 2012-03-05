@@ -23,10 +23,9 @@ require 'ipaddress'
 #
 # Library Files
 #
-require File.dirname(__FILE__) + './dns.rb'
+require File.dirname(__FILE__) + '/control/resolver_pool.rb'
 require File.dirname(__FILE__) + '/control/constants.rb'
 require File.dirname(__FILE__) + '/control/utilities.rb'
-require File.dirname(__FILE__) + '/control/priority_queue.rb'
 require File.dirname(__FILE__) + '/control/core/modules.rb'
 require File.dirname(__FILE__) + '/control/core/status.rb'
 require File.dirname(__FILE__) + '/control/core/device.rb'
@@ -92,13 +91,14 @@ module Control
 		}
 	end
 	
-	def self.start		
+	def self.start
+		@@resolver = ResolverPool.new
+		
 		EventMachine.run do
 			#
 			# Enable the scheduling system
 			#
 			@@scheduler = Rufus::Scheduler.start_new
-			@@resolver = EM::P::AsyncResolver.new
 			
 			System.logger.debug "Started with #{EM.get_max_timers} timers avaliable"
 			System.logger.debug "Started with #{EM.threadpool_size} threads in pool"

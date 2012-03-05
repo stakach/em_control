@@ -51,17 +51,14 @@ module Control
 		# Additional controls
 		#
 		def do_send_data(scheme, data)
-			begin
+			res = ResolverJob.new(scheme.ip)
+			res.callback {|ip|
+				
 				#
 				# Just in case the address is a domain name we want to ensure the
 				#	IP lookups are always correct and we are always sending to the
 				#	specified device
 				#
-				#
-				# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
-				# => Use the non-blocking resolver in the future
-				#
-				ip = Addrinfo.udp(scheme.ip, 80).ip_address
 				text = "#{scheme.ip}:#{scheme.port}"
 				old_ip = @ips[text]
 				if old_ip != ip
@@ -72,30 +69,28 @@ module Control
 					end
 				end
 				send_datagram(data, ip, scheme.port)
-			rescue => e
+			}
+			res.errback {|error|
 				EM.defer do
 					System.logger.info e.message + " calling UDP send for #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.control_system.name}"
 				end
-			end
+			}
 		end
 
 		def add_device(scheme, device)
 			EM.schedule do
-				begin
-					#
-					# TODO:: https://github.com/eventmachine/eventmachine/blob/master/tests/test_resolver.rb
-					# => Use the non-blocking resolver in the future
-					#
-					ip = Addrinfo.udp(scheme.ip, 80).ip_address
+				res = ResolverJob.new(scheme.ip)
+				res.callback {|ip|
 					@devices["#{ip}:#{scheme.port}"] = device
 					@ips["#{scheme.ip}:#{scheme.port}"] = ip
-				rescue => e
+				}
+				res.errback {|error|
 					@devices["#{scheme.ip}:#{scheme.port}"] = device
 					@ips["#{scheme.ip}:#{scheme.port}"] = scheme.ip
-					
-					EM.defer do
-						System.logger.info e.message + " adding UDP #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.control_system.name}"
-					end
+				}
+				
+				EM.defer do
+					System.logger.info e.message + " adding UDP #{scheme.dependency.actual_name} @ #{scheme.ip} in #{scheme.control_system.name}"
 				end
 			end
 		end

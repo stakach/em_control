@@ -27,7 +27,6 @@ gem 'em-websocket'						# Web page communication
 gem 'em-priority-queue'					# Command Queueing
 gem 'em-http-request'					# HTTP service support
 gem 'ipaddress'							# Checks for valid IP addresses
-gem 'net-dns'							# DNS resolver
 gem 'atomic'							# Atomic operations
 gem 'rufus-scheduler'					# Scheduled tasks
 

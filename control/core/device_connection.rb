@@ -6,7 +6,7 @@ require 'atomic'
 #
 module Control
 	module DeviceConnection
-		def initialize *args
+		def initialize( parent )
 			super
 		
 			@default_send_options = {
@@ -75,7 +75,7 @@ module Control
 			# Configure links between objects (This is a very loose tie)
 			#	Relies on serial loading of modules
 			#
-			@parent = Modules.loading
+			@parent = parent
 			@parent.setbase(self)
 			
 			@tls_enabled = @parent.secure_connection

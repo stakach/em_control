@@ -10,24 +10,6 @@ module Control
 			}
 		end
 	
-		def self.load_lock
-			@@load_lock
-		end
-	
-		def self.loading
-			@@load_lock.mon_synchronize {
-				return @@loading
-			}
-		end
-	
-		def self.loading=(mod)
-			@@load_lock.mon_synchronize {
-			
-				@@loading = mod
-			
-			}
-		end
-	
 		def self.load_module(dep)
 			@@load_lock.mon_synchronize {
 			
@@ -137,51 +119,58 @@ module Control
 				@@lookup[@instance] = [@device]
 				@@lookup_lock.unlock	#UNLOCK!! so we can lookup settings in on_load
 				
-				
 				devBase = nil
-				Modules.load_lock.mon_synchronize {
-					Modules.loading = @instance
-					
-					if !controllerDevice.udp
-						begin
-							EM.connect Addrinfo.tcp(controllerDevice.ip, 80).ip_address, controllerDevice.port, Device::Base
-						rescue => e
-							System.logger.info e.message + " connecting to #{controllerDevice.dependency.actual_name} @ #{controllerDevice.ip} in #{controllerDevice.control_system.name}"
-							EM.connect "127.0.0.1", 10, Device::Base	# Connect to a nothing port until the device name is found or updated
+				
+				loaded = Proc.new {
+					EM.defer do			
+						if @instance.respond_to?(:on_load)
+							begin
+								@instance.on_load
+							rescue => e
+								Control.print_error(System.logger, e, {
+									:message => "device module #{@instance.class} error whilst calling: on_load",
+									:level => Logger::ERROR
+								})
+							ensure
+								ActiveRecord::Base.clear_active_connections!
+							end
 						end
-					else
-						#
-						# Load UDP device here
-						#	Create UDP base
-						#	Add device to server
-						# => TODO::test!!
-						#	Call connected
-						#
-						devBase = DatagramBase.new
-						$datagramServer.add_device(controllerDevice, devBase)
+						
+						if controllerDevice.udp
+							
+							devBase.call_connected	# UDP is stateless (always connected)
+						
+						end
 					end
+				}
+					
+				if !controllerDevice.udp
+					res = ResolverJob.new(controllerDevice.ip)
+					res.callback {|ip|
+						EM.connect ip, controllerDevice.port, Device::Base, @instance
+						loaded.call
+					}
+					res.errback {|error|
+						EM.defer do
+							System.logger.info e.message + " connecting to #{controllerDevice.dependency.actual_name} @ #{controllerDevice.ip} in #{controllerDevice.control_system.name}"
+						end
+						EM.connect "127.0.0.1", 10, Device::Base, @instance	# Connect to a nothing port until the device name is found or updated
+						loaded.call
+					}
+				else
+					#
+					# Load UDP device here
+					#	Create UDP base
+					#	Add device to server
+					# => TODO::test!!
+					#	Call connected
+					#
+					devBase = DatagramBase.new(@instance)
+					$datagramServer.add_device(controllerDevice, devBase)
+					loaded.call
+				end
 					
 					#@@devices[baselookup] = Modules.loading	# set in device_connection (see todo above)
-				}
-				
-				if @instance.respond_to?(:on_load)
-					begin
-						@instance.on_load
-					rescue => e
-						Control.print_error(System.logger, e, {
-							:message => "device module #{@instance.class} error whilst calling: on_load",
-							:level => Logger::ERROR
-						})
-					ensure
-						ActiveRecord::Base.clear_active_connections!
-					end
-				end
-				
-				if controllerDevice.udp
-					EM.defer do
-						devBase.call_connected	# UDP is stateless (always connected)
-					end
-				end
 			else
 				#
 				# add parent may lock at this point!

@@ -148,35 +148,19 @@ module Control
 							
 							@connect_retry.update { |v| v += 1}
 							
-							if @connect_retry.value == 0 || makebreak
-								if IPAddress.valid? settings.ip
-									EM.schedule do
-										reconnect settings.ip, settings.port
+							if @connect_retry.value == 1 || makebreak
+								res = ResolverJob.new(settings.ip)
+								res.callback {|ip|
+									reconnect ip, settings.port
+								}
+								res.errback {|error|
+									EM.defer do
+										logger.info "module #{@parent.class} in tcp_control.rb, unbind"
+										logger.info "Reconnect failed for #{settings.ip}:#{settings.port} - #{err.inspect}"
 									end
-								else
-									error = Proc.new { |err|
-										EM.defer do
-											@connect_retry.value = 2
-											
-											logger.info "module #{@parent.class} in tcp_control.rb, unbind"
-											logger.info "Reconnect failed for #{settings.ip}:#{settings.port} - #{err.inspect}"
-											
-											do_reconnect(settings) unless makebreak
-										end
-									}
-									EM.schedule do
-										df = Control.resolver.query_async(settings.ip)
-										df.callback {|msg|
-											if !msg.answer.empty?
-												reconnect msg.answer[0].address.to_s, settings.port
-											else
-												error.call('not found')
-											end
-										}
-										df.errback &error
-									end
-								end
-								
+									@connect_retry.value = 2
+									do_reconnect(settings) unless makebreak
+								}
 							else
 								#
 								# log this once if had to retry more than once
@@ -203,24 +187,15 @@ module Control
 			end
 			
 			def do_reconnect(settings)
-				EM::Timer.new(15) do
+				EM::Timer.new(5) do
 					if !@shutting_down.value
-						if IPAddress.valid? settings.ip
-							reconnect settings.ip, settings.port
-						else
-							error = Proc.new { |err|
-								do_reconnect(settings)
-							}
-							df = Control.resolver.query_async(settings.ip)
-							df.callback {|msg|
-								if !msg.answer.empty?
-									reconnect msg.answer[0].address.to_s, settings.port
-								else
-									error.call('not found')
-								end
-							}
-							df.errback &error
-						end
+						res = ResolverJob.new(settings.ip)
+						res.callback {|ip|
+							reconnect ip, settings.port
+						}
+						res.errback {|error|
+							do_reconnect(settings)
+						}
 					end
 				end
 			end
