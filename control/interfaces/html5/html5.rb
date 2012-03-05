@@ -74,6 +74,7 @@ class HTML5Monitor
 		@system = nil
 		@user = nil
 		
+		
 		@socket.send(JSON.generate({:event => "authenticate", :data => []}))
 		
 		#
@@ -115,13 +116,11 @@ class HTML5Monitor
 			# Prevent DOS/brute force Attacks
 			#
 			@ignoreAuth = true
-			Control.scheduler.in '2s' do
+			EM.add_timer(2) do
 				begin
 					@socket.send(JSON.generate({:event => "authenticate", :data => []}))
 				ensure
-					@data_lock.synchronize {
-						@ignoreAuth = false
-					}
+					@ignoreAuth = false
 				end
 			end
 		end
@@ -132,13 +131,11 @@ class HTML5Monitor
 		return if @ignoreSys	
 		@ignoreSys = true
 		
-		Control.scheduler.in '2s' do
+		EM.add_timer(2) do
 			begin
 				@socket.send(JSON.generate({:event => "system", :data => []}))
 			ensure
-				@data_lock.synchronize {
-					@ignoreSys = false
-				}
+				@ignoreSys = false
 			end
 		end
 	end
@@ -184,16 +181,24 @@ class HTML5Monitor
 						if @system.nil?
 							send_system
 						elsif @system == false	# System offline
-							@socket.send(JSON.generate({:event => "offline", :data => []}))
-							shutdown
+							EM.schedule do
+								@socket.send(JSON.generate({:event => "offline", :data => []}))
+								shutdown
+							end
 						else
-							@socket.send(JSON.generate({:event => "ready", :data => []}))
+							EM.schedule do
+								@socket.send(JSON.generate({:event => "ready", :data => []}))
+							end
 						end
 					when :ping
-						@socket.send(JSON.generate({:event => "pong", :data => []}))
+						EM.schedule do
+							@socket.send(JSON.generate({:event => "pong", :data => []}))
+						end
 					when :ls
-						@socket.send(JSON.generate({:event => "ls",
-							:data => Control::Communicator.system_list(@user)}))
+						systems = Control::Communicator.system_list(@user)
+						EM.schedule do
+							@socket.send(JSON.generate({:event => "ls", :data => systems}))
+						end
 				end
 			elsif @@special_commands.has_key?(data[:command])	# reg, unreg
 				array = data[:data]
@@ -220,7 +225,9 @@ class HTML5Monitor
 	end
 	
 	def shutdown
-		@socket.close_websocket
+		EM.schedule do
+			@socket.close_websocket
+		end
 	end
 	
 	def notify(mod_sym, stat_sym, data)
@@ -228,73 +235,66 @@ class HTML5Monitor
 		# This should be re-entrant? So no need to protect
 		#
 		@system.logger.debug "#{mod_sym}.#{stat_sym} sent #{data.inspect}"
-		@socket.send(JSON.generate({"event" => "#{mod_sym}.#{stat_sym}", "data" => data}))
+		EM.schedule do
+			@socket.send(JSON.generate({"event" => "#{mod_sym}.#{stat_sym}", "data" => data}))
+		end
 	end
 end
 
 
 module Control
 	class System
-		
-		def self.socket_server=(server)
-			@@god_lock.synchronize {
-				@@socket_server = server
-			}
-		end
-		
-		def self.socket_server
-			@@god_lock.synchronize {
-				@@socket_server
-			}
-		end
-
 		def self.start_websockets
-			System.socket_server = EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket| # , :debug => true
+			EM.schedule do
+				if @@socket_server.nil?
+					@@socket_server = EventMachine::WebSocket.start(:host => "0.0.0.0", :port => 81) do |socket| # , :debug => true
+						socket.onopen {
+							#
+							# This socket represents a connected device
+							#
+							HTML5Monitor.register(socket)
+						}
+						
+						socket.onmessage { |data|
+							#
+							# Attach socket here to system
+							#	then process commands
+							#
+							HTML5Monitor.receive(socket, data)
+						}
 				
+						socket.onclose {
+							HTML5Monitor.unregister(socket)
+						}
+						
+						socket.onerror { |error|
+							if !error.kind_of?(EM::WebSocket::WebSocketError)
+								EM.defer do
+									Control.print_error(Control::System.logger, error, {
+										:message => "in html5.rb, onerror : issue with websocket data",
+										:level => Logger::ERROR
+									})
+								end
+							else
+								EM.defer do
+									Control::System.logger.info "in html5.rb, onerror : invalid handshake received - #{error.inspect}"
+								end
+							end
+						}
+					end
 				
-				socket.onopen {
-					#
-					# This socket represents a connected device
-					#
-					HTML5Monitor.register(socket)
-			
-					
-					socket.onmessage { |data|
-						#
-						# Attach socket here to system
-						#	then process commands
-						#
-						HTML5Monitor.receive(socket, data)
-					}
-			
-					socket.onclose {
-						HTML5Monitor.unregister(socket)
-					}
-					
-					socket.onerror { |error|
-						if !error.kind_of?(EM::WebSocket::WebSocketError)
-							EM.defer do
-								Control.print_error(Control::System.logger, error, {
-									:message => "in html5.rb, onerror : issue with websocket data",
-									:level => Logger::ERROR
-								})
-							end
-						else
-							EM.defer do
-								Control::System.logger.info "in html5.rb, onerror : invalid handshake received - #{error.inspect}"
-							end
-						end
-					}
-				}
-			
+				end
 			end
-			
-			Control::System.logger.info 'running HTML5 socket server on port 81'
+			EM.defer do
+				Control::System.logger.info 'running HTML5 socket server on port 81'
+			end
 		end
 		
 		def self.stop_websockets
-			EventMachine::stop_server(System.socket_server)
+			EM.schedule do
+				EventMachine::stop_server(@@socket_server) unless @@socket_server.nil?
+				@@socket_server = nil
+			end
 		end
-	
 	end
 end
