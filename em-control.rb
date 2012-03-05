@@ -118,9 +118,10 @@ module Control
 						System.logger.debug "Booting #{controller.name}"
 						System.new(controller, @logLevel)
 					rescue => e
-						System.logger.error "error during boot"
-						System.logger.error e.message
-						System.logger.error e.backtrace
+						Control.print_error(Control::System.logger, e, {
+							:message => "Error during boot",
+							:level => Logger::ERROR
+						})
 					end
 				end
 			end
@@ -147,11 +148,23 @@ module Control
 			EventMachine.add_periodic_timer(30) {
 				begin
 					System.stop_websockets
-				rescue
+				rescue => e
+					EM.defer do
+						Control.print_error(Control::System.logger, e, {
+							:message => "Failed to stop websocket",
+							:level => Logger::FATAL
+						})
+					end
 				end
 				begin
 					System.start_websockets
-				rescue
+				rescue => e
+					EM.defer do
+						Control.print_error(Control::System.logger, e, {
+							:message => "Failed to start websocket",
+							:level => Logger::FATAL
+						})
+					end
 				end
 			}
 		end

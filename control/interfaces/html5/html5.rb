@@ -75,6 +75,10 @@ class HTML5Monitor
 		@user = nil
 		
 		@socket.send(JSON.generate({:event => "authenticate", :data => []}))
+		
+		#
+		# TODO:: start a schedule here that sends a ping to the browser every so often
+		#
 	end
 	
 	
