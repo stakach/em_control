@@ -144,7 +144,7 @@ module Control
 			#
 			# Start server
 			#
-			EM.add_timer(40)
+			EM.add_timer(40) do
 				System.start_websockets
 			end
 		end
