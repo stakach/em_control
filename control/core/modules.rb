@@ -152,7 +152,7 @@ module Control
 					}
 					res.errback {|error|
 						EM.defer do
-							System.logger.info e.message + " connecting to #{controllerDevice.dependency.actual_name} @ #{controllerDevice.ip} in #{controllerDevice.control_system.name}"
+							System.logger.info error.message + " connecting to #{controllerDevice.dependency.actual_name} @ #{controllerDevice.ip} in #{controllerDevice.control_system.name}"
 						end
 						EM.connect "127.0.0.1", 10, Device::Base, @instance	# Connect to a nothing port until the device name is found or updated
 						loaded.call
