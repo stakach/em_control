@@ -83,9 +83,9 @@ module Control
 								rescue => e
 									Control.print_error(System.logger, e, :message => "Error in one off scheduled event")
 								ensure
-									@job_lock.synchronize {
+									EM.schedule do
 										@jobs.delete(index)
-									}
+									end
 								end
 							end
 						else
@@ -174,7 +174,10 @@ module Control
 		# Schedule events
 		#
 		def schedule
-			@schedule ||= ScheduleProxy.new
+			return @schedule unless @schedule.nil?
+			@status_lock.synchronize {
+				@schedule ||= ScheduleProxy.new
+			}
         end
 		
 		
