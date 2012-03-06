@@ -10,27 +10,42 @@ module Control
 		
 		
 		def self.new_system(controller, log_level = Logger::INFO)
-			controller = ControlSystem.find(controller) if controller.class == Fixnum
-			controller = ControlSystem.where('name = ?', controller).first if controller.class == String
-			
 			begin
+				if controller.class == Fixnum
+					controller = ControlSystem.find(controller)
+				elsif controller.class == String
+					controller = ControlSystem.where('name = ?', controller).first
+				end
+				
+				if controller.class != ControlSystem
+					raise 'invalid controller identifier'
+				end
+			
 				@@god_lock.lock
 				if @@controllers[controller.id].nil?
 					@@god_lock.unlock
-					System.new(controller, log_level)
+					sys = System.new(controller, log_level)
+					if controller.active
+						begin
+							sys.start(true)			# as this is loading the first time we ignore controller active
+						rescue => e
+							Control.print_error(@@logger, e, {
+								:message => "Error starting system in new_system, stopping..",
+								:level => Logger::ERROR
+							})
+							begin
+								sys.stop
+							rescue => e
+								Control.print_error(@@logger, e, {
+									:message => "Error stopping system after problems starting..",
+									:level => Logger::ERROR
+								})
+							end
+						end
+					end
 				else
 					@@god_lock.unlock
 				end
-			rescue => e
-				begin
-					@@god_lock.unlock
-				rescue
-				end
-				
-				Control.print_error(@@logger, e, {
-					:message => "class System in self.new_system",
-					:level => Logger::ERROR
-				})
 			ensure
 				ActiveRecord::Base.clear_active_connections!	# Clear any unused connections
 			end
@@ -81,7 +96,7 @@ module Control
 		
 		#
 		# System Logger
-		#	
+		#
 		def self.logger
 			@@logger
 		end
@@ -318,10 +333,6 @@ module Control
 				@@systems[@controller.name.to_sym] = self	# it may not be started
 				@@controllers[@controller.id] = self
 			}
-			
-			if @controller.active
-				start(true)			# as this is loading the first time we ignore controller active
-			end
 		end
 	end
 end

@@ -101,13 +101,16 @@ module Control
 			#
 			@@scheduler = Rufus::Scheduler.start_new
 			
-			System.logger.debug "Started with #{EM.get_max_timers} timers avaliable"
-			System.logger.debug "Started with #{EM.threadpool_size} threads in pool"
+			EM.defer do
+				System.logger.debug "Started with #{EM.get_max_timers} timers avaliable"
+				System.logger.debug "Started with #{EM.threadpool_size} threads in pool"
+			end
 			
 			#
 			# Start the UDP server
+			# 	Disabled for now
 			#
-			EM.open_datagram_socket "127.0.0.1", 0, DatagramServer
+			#EM.open_datagram_socket "127.0.0.1", 0, DatagramServer
 
 			#
 			# Load the system based on the database
@@ -116,12 +119,13 @@ module Control
 				EM.defer do
 					begin
 						System.logger.debug "Booting #{controller.name}"
-						System.new(controller, @logLevel)
+						System.new_system(controller, @logLevel)
 					rescue => e
 						Control.print_error(Control::System.logger, e, {
 							:message => "Error during boot",
-							:level => Logger::ERROR
+							:level => Logger::FATAL
 						})
+						EventMachine::stop_event_loop
 					end
 				end
 			end

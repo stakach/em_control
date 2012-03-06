@@ -60,9 +60,13 @@ module Control
 		def resolve 
 			begin
 				ip = Resolv.getaddress(@hostname)
-				self.succeed(ip)
+				EM.schedule do
+					self.succeed(ip)
+				end
 			rescue => e
-				self.fail(e)
+				EM.schedule do
+					self.fail(e)
+				end
 			end
 		end
 		

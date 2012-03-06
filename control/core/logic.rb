@@ -29,13 +29,7 @@ module Control
 		
 		
 		def clear_active_timers
-			return if @active_timers.nil?
-			
-			@active_timers.synchronize {
-				while @active_timers.length > 0
-					@active_timers[0].cancel
-				end
-			}
+			@schedule.clear_jobs unless @schedule.nil?
 		end
 
 		

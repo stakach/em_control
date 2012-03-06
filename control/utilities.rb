@@ -23,23 +23,26 @@ module Control
 		def initialize(jobs, index, lock)
 			@jobs = jobs
 			@index = index
-			@job_lock = lock
 			@job = @jobs[@index]	# only ever called from within the lock
 		end
 		
 		
 		def unschedule
-			@job.unschedule
-			
-			@job_lock.synchronize {
-				@jobs.delete(@index)
-			}
+			EM.schedule do
+				begin
+					@job.unschedule
+					@jobs.delete(@index)
+				rescue
+				end
+			end
 		end
 		
 		protected
 		
 		def method_missing(name, *args, &block)
-			@job.send(name, *args, &block)
+			EM.schedule do
+				@job.send(name, *args, &block)
+			end
 		end
 	end
 	
@@ -50,64 +53,66 @@ module Control
 		def initialize
 			@jobs = {}
 			@index = 0
-			@job_lock = Mutex.new
 		end
 		
 		def clear_jobs
-			@job_lock.synchronize {
+			EM.schedule do
 				@jobs.each_value do |job|
 					job.unschedule
 				end
 				
 				@jobs = {}
 				@index = 0
-			}
+			end
 		end
 		
 		protected
 		
 		def method_missing(name, *args, &block)
-			if block.present?
-				job = nil
-				
-				@job_lock.synchronize {
-					if [:in, :at].include?(name)
-						index = @index				# local variable for the block
+			EM.schedule do
+				begin
+					if block.present?
+						job = nil
 						
-						job = Control::scheduler.send(name, *args) do
-							begin
-								block.call
-							rescue => e
-								Control.print_error(System.logger, e, :message => "Error in one off scheduled event")
-							ensure
-								@job_lock.synchronize {
-									@jobs.delete(index)
-								}
+						if [:in, :at].include?(name)
+							index = @index				# local variable for the block
+							
+							job = Control::scheduler.send(name, *args) do
+								begin
+									block.call
+								rescue => e
+									Control.print_error(System.logger, e, :message => "Error in one off scheduled event")
+								ensure
+									@job_lock.synchronize {
+										@jobs.delete(index)
+									}
+								end
+							end
+						else
+							job = Control::scheduler.send(name, *args) do
+								begin
+									block.call
+								rescue => e
+									Control.print_error(System.logger, e, :message => "Error in repeated scheduled event")
+								end
 							end
 						end
+						
+						if job.present?
+							@jobs[@index] = job
+							job = JobProxy.new(@jobs, @index, @job_lock)
+							
+							@index += 1
+							
+							return job
+						end
+						
+						return nil
 					else
-						job = Control::scheduler.send(name, *args) do
-							begin
-								block.call
-							rescue => e
-								Control.print_error(System.logger, e, :message => "Error in repeated scheduled event")
-							end
-						end
+						Control::scheduler.send(name, *args, &block)
 					end
-					
-					if job.present?
-						@jobs[@index] = job
-						job = JobProxy.new(@jobs, @index, @job_lock)
-						
-						@index += 1
-						
-						return job
-					end
-				}
-				
-				return nil
-			else
-				return Control::scheduler.send(name, *args, &block)
+				rescue
+				end
 			end
         end
 	end

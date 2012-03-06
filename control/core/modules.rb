@@ -122,7 +122,7 @@ module Control
 				devBase = nil
 				
 				loaded = Proc.new {
-					EM.defer do			
+					EM.defer do
 						if @instance.respond_to?(:on_load)
 							begin
 								@instance.on_load
