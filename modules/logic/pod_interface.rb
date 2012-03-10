@@ -1,4 +1,3 @@
-
 require 'json'
 
 class PodInterface < Control::Logic		
@@ -8,6 +7,9 @@ class PodInterface < Control::Logic
 				#
 				# Someone connected -- check they are valid
 				#
+				@serialise = Mutex.new
+				@waitlock = Mutex.new
+				@cv = ConditionVariable.new
 				port, ip = Socket.unpack_sockaddr_in(get_peername)
 				Control::System.logger.info "AMX POD Interface -- connection from: #{ip}"
 			rescue => e
@@ -42,59 +44,85 @@ class PodInterface < Control::Logic
 		
 		def process_command(line)
 			EM.defer do
-				begin
-					line = JSON.parse(line, {:symbolize_names => true})
-					
-					#
-					# Process commands here
-					#
-					systems = Zone.where(:name => line[:control]).first.control_systems
-					failed = false
-					
-					if not line[:presentation].nil?
-						systems.each do |pod|
-							EM.defer do
-								begin
-									Control::System[pod.name][:Pod].enable_sharing(line[:presentation])
-								rescue => e
-									Control.print_error(Control::System.logger, e, {
-										:message => "module PodInterface error enabling presentation on pod #{pod.name}",
-										:level => Logger::WARN
-									})
-								end
-							end
-						end
-					elsif not line[:override].nil?
-						systems.each do |pod|
-							EM.defer do
-								begin
-									Control::System[pod.name][:Pod].do_share(line[:override])
-								rescue => e
-									Control.print_error(Control::System.logger, e, {
-										:message => "module PodInterface error overriding pod #{pod.name}",
-										:level => Logger::WARN
-									})
-								end
-							end
-						end
-					else
-						failed = true
-						send_data("" << 0x02 << JSON.generate({'result' => false}) << 0x03)
-					end
-					
-					send_data("" << 0x02 << JSON.generate({'result' => true}) << 0x03) unless failed
-					
-					ActiveRecord::Base.clear_active_connections!
-				rescue => e
-					Control.print_error(Control::System.logger, e, {
-						:message => "module PodInterface error processing AMX command",
-						:level => Logger::ERROR
-					})
+				@serialise.synchronize {
 					begin
-						send_data("" << 0x02 << JSON.generate({'result' => 'server error'}) << 0x03)
-					rescue
+						line = JSON.parse(line, {:symbolize_names => true})
+						
+						#
+						# Process commands here
+						#
+						systems = Zone.where(:name => line[:control]).first.control_systems
+						@count = 0
+						@total = systems.count
+						failed = false
+						
+						if not line[:presentation].nil?
+							systems.each do |pod|
+								EM.defer do
+									begin
+										Control::System[pod.name][:Pod].enable_sharing(line[:presentation])
+									rescue => e
+										Control.print_error(Control::System.logger, e, {
+											:message => "module PodInterface error enabling presentation on pod #{pod.name}",
+											:level => Logger::WARN
+										})
+									ensure
+										@waitlock.synchronize {
+											@count += 1
+											if @count == @total
+												@cv.signal
+											end
+										}
+									end
+								end
+							end
+						elsif not line[:override].nil?
+							systems.each do |pod|
+								EM.defer do
+									begin
+										Control::System[pod.name][:Pod].do_share(line[:override])
+									rescue => e
+										Control.print_error(Control::System.logger, e, {
+											:message => "module PodInterface error overriding pod #{pod.name}",
+											:level => Logger::WARN
+										})
+									ensure
+										@waitlock.synchronize {
+											@count += 1
+											if @count == @total
+												@cv.signal
+											end
+										}
+									end
+								end
+							end
+						else
+							failed = true
+							send_data("" << 0x02 << JSON.generate({'result' => false}) << 0x03)
+						end
+						
+						if not failed
+							@waitlock.synchronize {
+								if @count != @total
+									@cv.wait(@waitlock)
+								end
+							}
+							send_data("" << 0x02 << JSON.generate({'result' => true}) << 0x03)
+						end
+						
+					rescue => e
+						Control.print_error(Control::System.logger, e, {
+							:message => "module PodInterface error processing AMX command",
+							:level => Logger::ERROR
+						})
+						begin
+							send_data("" << 0x02 << JSON.generate({'result' => 'server error'}) << 0x03)
+						rescue
+						end
+					ensure
+						ActiveRecord::Base.clear_active_connections!
 					end
-				end
+				}
 			end
 		end
 	end
