@@ -10,7 +10,8 @@ module Control
 			@pool = Array.new(@size) do |i|
 				
 				Thread.new do
-					Thread.current[:id] = i
+					#Thread.current[:id] = i
+					Thread.current.priority = Thread.current.priority - 1
 					loop do
 						begin
 							job = @jobs.pop
