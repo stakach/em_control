@@ -117,21 +117,21 @@ class PodControl < Control::Logic
 						self[:set_default_pc] = false
 						default_display_config
 					end
-					do_share(false) if self[:share_display]
+					self[:share_display] = false if self[:share_display]
 				when setting('laptop1')
 					self[:input] = :laptop1
 					if self[:set_default_laptop1]
 						self[:set_default_laptop1] = false
 						default_display_config
 					end
-					do_share(false) if self[:share_display]
+					self[:share_display] = false if self[:share_display]
 				when setting('laptop2')
 					self[:input] = :laptop2
 					if self[:set_default_laptop2]
 						self[:set_default_laptop2] = false
 						default_display_config
 					end
-					do_share(false) if self[:share_display]
+					self[:share_display] = false if self[:share_display]
 				when setting('sharing_input')
 					self[:input] = 'sharing_input'
 					do_share(true) unless self[:share_display]
