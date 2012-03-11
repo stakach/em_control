@@ -165,7 +165,7 @@ class PodControl < Control::Logic
 			self[:share_display] = true
 			select('sharing_input')
 			system[:Display].mute
-		elsif self[:share_display] == true
+		elsif value == false && self[:share_display] == true
 			system[:Display].unmute
 			self[:share_display] = false
 			select(self[:old_input] || 'in-house-pc')
