@@ -222,6 +222,7 @@ class HTML5Monitor
 			:message => "in html5.rb, recieve : probably malformed JSON data",
 			:level => Logger::ERROR
 		})
+		shutdown
 	end
 	
 	def shutdown

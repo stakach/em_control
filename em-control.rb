@@ -141,7 +141,7 @@ module Control
 			#
 			# Emit connection counts for logging
 			#
-			@@scheduler.every '10s' do
+			@@scheduler.every '10m' do
 				System.logger.info "There are #{EM.connection_count} connections to this server"
 			end
 			

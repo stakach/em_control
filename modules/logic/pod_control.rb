@@ -78,9 +78,9 @@ class PodControl < Control::Logic
 			# Switch to the correct audio source
 			#
 			if(input == 'in-house-pc')
-				system[:Display].switch_audio(:audio1)
+				system[:Display].switch_audio(setting('pc-audio'))
 			else
-				system[:Display].switch_audio(:audio2)
+				system[:Display].switch_audio(setting('laptop-audio'))
 			end
 		end
 	end
@@ -117,18 +117,21 @@ class PodControl < Control::Logic
 						self[:set_default_pc] = false
 						default_display_config
 					end
+					do_share(false) if self[:share_display]
 				when setting('laptop1')
 					self[:input] = :laptop1
 					if self[:set_default_laptop1]
 						self[:set_default_laptop1] = false
 						default_display_config
 					end
+					do_share(false) if self[:share_display]
 				when setting('laptop2')
 					self[:input] = :laptop2
 					if self[:set_default_laptop2]
 						self[:set_default_laptop2] = false
 						default_display_config
 					end
+					do_share(false) if self[:share_display]
 				when setting('sharing_input')
 					self[:input] = 'sharing_input'
 					do_share(true) unless self[:share_display]

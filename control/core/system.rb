@@ -35,6 +35,24 @@ module Control
 							})
 							begin
 								sys.stop
+								EM.schedule do
+									EM.add_timer(60) do # Attempt a single restart
+										EM.defer do
+											begin
+												sys.start(true)
+											rescue => e
+												begin
+													Control.print_error(@@logger, e, {
+														:message => "Second start attempt failed..",
+														:level => Logger::ERROR
+													})
+													sys.stop
+												rescue
+												end
+											end
+										end
+									end
+								end
 							rescue => e
 								Control.print_error(@@logger, e, {
 									:message => "Error stopping system after problems starting..",
