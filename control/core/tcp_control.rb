@@ -168,8 +168,6 @@ module Control
 								if @connect_retry.value == 2
 									logger.info "module #{@parent.class} in tcp_control.rb, unbind"
 									logger.info "Reconnect failed for #{settings.ip}:#{settings.port}"
-								else
-									logger.debug "module #{@parent.class}:#{settings.ip}:#{settings.port} reconnect failed: #{@connect_retry.value}"
 								end
 				
 								do_reconnect(settings)
