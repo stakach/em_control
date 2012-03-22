@@ -38,8 +38,11 @@ module Control
 				@emit_hasnt_occured.each_pair do | key, block |
 					data = @status[key]
 					task do
-						block.call(data)
-						ActiveRecord::Base.clear_active_connections!
+						begin
+							block.call(data)
+						ensure
+							ActiveRecord::Base.clear_active_connections!
+						end
 					end
 					logger.debug "A forced emit on #{status} occured"
 				end
@@ -65,8 +68,11 @@ module Control
 						
 							block = @emit_hasnt_occured.delete(status)
 							task do
-								block.call(data)
-								ActiveRecord::Base.clear_active_connections!
+								begin
+									block.call(data)
+								ensure
+									ActiveRecord::Base.clear_active_connections!
+								end
 							end
 						#logger.debug "Emit clear success: #{status}"
 						end
