@@ -1,3 +1,6 @@
+#
+# DEFAULT IP Control port: 1515
+#
 class SamsungLcd < Control::Device
 
 	#
@@ -12,6 +15,10 @@ class SamsungLcd < Control::Device
 		#
 		self[:volume_min] = 0
 		self[:volume_max] = 100
+		self[:brightness_min] = 0
+		self[:brightness_max] = 100
+		self[:contrast_min] = 0
+		self[:contrast_max] = 100	# multiply by two when VGA selected
 	end
 	
 	def connected
@@ -33,15 +40,14 @@ class SamsungLcd < Control::Device
 	
 	
 	COMMANDS = {
+		:status => 0x00,
 		:power => 0x11,
 		:volume => 0x12,
+		:mute => 0x13,
 		:input => 0x14,
-		:screen_mode => 0x18,
-		:screen_size => 0x19,
-		:pip_control => 0x3C,
 		:auto_adjust => 0x3D,
-		:video_wall_mode => 0x5C,
-		:safety_lock => 0x5D
+		:contrast => 0x24,
+		:brightness => 0x25
 	}
 	COMMAND_LOOKUP = COMMANDS.invert
 	
@@ -107,6 +113,21 @@ class SamsungLcd < Control::Device
 	end
 	
 	
+	
+	def brightness(val, options = {})
+		val = 100 if val > 100
+		val = 0 if val < 0
+		
+		do_send(COMMANDS[:brightness], val, options)
+	end
+	
+	def contrast(val, options = {})
+		val = 100 if val > 100
+		val = 0 if val < 0
+		
+		do_send(COMMANDS[:contrast], val, options)
+	end
+	
 	def volume(val, options = {})
 		val = 100 if val > 100
 		val = 0 if val < 0
@@ -114,20 +135,24 @@ class SamsungLcd < Control::Device
 		do_send(COMMANDS[:volume], val, options)
 	end
 	
+	def mute
+		do_send(COMMANDS[:mute], 1)
+		
+		logger.debug "-- Samsung LCD, requested to mute audio"
+	end
+	
+	def unmute
+		do_send(COMMANDS[:mute], 0)
+		
+		logger.debug "-- Samsung LCD, requested to unmute audio"
+	end
+	
 
 	#
 	# LCD Response code
 	#
 	def received(data, command)
-		#
-		# Get start of text
-		#
-		data = data.split("\xAA")
-		if data.length >= 2
-			data = str_to_array(data[-1])	# valid response
-		else
-			return :ignore	# Invalid data (we shall ignore)
-		end
+		data = str_to_array(data)
 		
 		#
 		# Check the response is valid
@@ -139,19 +164,25 @@ class SamsungLcd < Control::Device
 		#
 		# Check if the response was an error
 		#
-		if data[3] != 0x41
+		if data[4] != 0x41
 			return :failed
 		end
 		
 		#
 		# Extract status value
 		#
-		command = data[4]
-		value = data[5]
+		command = data[5]
+		value = data[6]
 		
 		#logger.debug "Orion LCD, sent #{data}"
 		
 		case COMMAND_LOOKUP[command]
+			when :status
+				self[:power] = value == 1
+				self[:volume] = data[7]
+				self[:mute] = data[8] == 1
+				self[:input] = INPUT_LOOKUP[data[9]]
+				
 			when :power
 				power = value == 1
 				
@@ -166,10 +197,18 @@ class SamsungLcd < Control::Device
 				
 			when :volume
 				self[:volume] = value
+			
+			when :mute
+				self[:mute] = value == 1
 				
 			when :input
 				self[:input] = INPUT_LOOKUP[value]
 				
+			when :contrast
+				self[:contrast] = value
+				
+			when :brightness
+				self[:brightness] = value
 		end
 		
 		return :success # Command success
@@ -180,9 +219,9 @@ class SamsungLcd < Control::Device
 	
 	
 	def do_poll
-		do_send(COMMANDS[:power], nil, :priority => 99)
-		do_send(COMMANDS[:volume], nil, :priority => 99)
-		do_send(COMMANDS[:input], nil, :priority => 99)
+		do_send(COMMANDS[:status], nil, :priority => 99)
+		do_send(COMMANDS[:brightness], nil, :priority => 99)
+		do_send(COMMANDS[:contrast], nil, :priority => 99)
 	end
 	
 
@@ -213,7 +252,7 @@ class SamsungLcd < Control::Device
 	
 	def check_sum(response)	# Assume already converted to bytes
 		check = 0
-		response[0..-2].each do |byte|
+		response[1..-2].each do |byte|
 			check += byte
 		end
 		check = check & 0xFF

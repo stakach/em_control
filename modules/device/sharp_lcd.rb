@@ -218,14 +218,14 @@ class SharpLcd < Control::Device
 	
 	def mute
 		do_send('MUTE   1')
-		mute_status(0)	# High priority mute status
+		mute_status(50)	# High priority mute status
 		
 		logger.debug "-- Sharp LCD, requested to mute audio"
 	end
 	
 	def unmute
 		do_send('MUTE   0')
-		mute_status(0)	# High priority mute status
+		mute_status(50)	# High priority mute status
 		
 		logger.debug "-- Sharp LCD, requested to unmute audio"
 	end
