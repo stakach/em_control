@@ -33,9 +33,11 @@ class PodControl < Control::Logic
 			refresh
 		end
 		schedule.cron('30 7 * * 1-5') do 	# Every day (except weekends) at 7:30am - turn on pods
-			system[:Display].power_on? do |power|
-				if power == Off
-					select('in-house-pc')
+			if setting(:auto_on) == 'yes'
+				system[:Display].power_on? do |power|
+					if power == Off
+						select('in-house-pc')
+					end
 				end
 			end
 		end
