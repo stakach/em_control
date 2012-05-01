@@ -240,7 +240,7 @@ class SamsungLcd < Control::Device
 		# Generate the checksum
 		#
 		check = 0
-		data[1..-1].each do |byte|
+		command[1..-1].each_byte do |byte|
 			check += byte
 		end
 		check = check & 0xFF
