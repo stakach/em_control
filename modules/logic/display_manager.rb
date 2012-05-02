@@ -6,7 +6,7 @@
 # => displayX == the name of the display at that load order
 #
 
-class DisplayManager < Control::Logic
+class DisplayManagerLogic < Control::Logic
 
 	def on_load
 		update_settings
