@@ -220,8 +220,10 @@ class SamsungLcd < Control::Device
 	
 	def do_poll
 		do_send(COMMANDS[:status], nil, :priority => 99)
-		do_send(COMMANDS[:brightness], nil, :priority => 99)
-		do_send(COMMANDS[:contrast], nil, :priority => 99)
+		if self[:power] == On
+			do_send(COMMANDS[:brightness], nil, :priority => 99)
+			do_send(COMMANDS[:contrast], nil, :priority => 99)
+		end
 	end
 	
 
