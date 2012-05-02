@@ -18,14 +18,14 @@ class DisplayManager < Control::Logic
 	
 	def all_on
 		for i in 1..self[:number]
-			system["Display#{i}"].power(On)
+			system["Display_#{i}"].power(On)
 		end
 	end
 	
 	
 	def all_off
 		for i in 1..self[:number]
-			system["Display#{i}"].power(Off)
+			system["Display_#{i}"].power(Off)
 		end
 	end
 	
@@ -36,7 +36,7 @@ class DisplayManager < Control::Logic
 		self[:number] = setting(:number)
 		
 		for i in 1..self[:number]
-			self["display#{i}"] = setting("display#{i}")
+			self["display_#{i}"] = setting("display_#{i}")
 		end
 		
 		if @power_up_time.nil? || @power_up_time != setting(:power_up)
