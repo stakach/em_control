@@ -1,4 +1,3 @@
-
 module Control
 	module ModuleCore
 		include Status	# The observable pattern (Should not be called directly)
@@ -56,7 +55,7 @@ module Control
 		# => TODO:: We should get all zones that the pod is in with the setting set and select the first setting (vs first zone)
 		#		
 		def setting(name)
-			val = config.settings.where("name = ?", name.to_s).first || config.control_system.zones.first.settings.where("name = ?", name.to_s).first || config.dependency.settings.where("name = ?", name.to_s).first
+			val = config.settings.where("name = ?", name.to_s).first || config.control_system.zones.joins(:settings).where('settings.name = ?', name.to_s).first.settings.where("name = ?", name.to_s).first || config.dependency.settings.where("name = ?", name.to_s).first
 			
 			if !val.nil?
 				case val.value_type
