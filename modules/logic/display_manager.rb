@@ -36,7 +36,7 @@ class DisplayManagerLogic < Control::Logic
 		self[:number] = setting(:number)
 		
 		for i in 1..self[:number]
-			self["display_#{i}"] = setting("display_#{i}")
+			self["Display_#{i}"] = setting("display_#{i}")
 		end
 		
 		if @power_up_time.nil? || @power_up_time != setting(:power_up)
