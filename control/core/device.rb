@@ -55,9 +55,15 @@ module Control
 		# => TODO:: We should get all zones that the pod is in with the setting set and select the first setting (vs first zone)
 		#		
 		def setting(name)
-			val = config.settings.where("name = ?", name.to_s).first || config.control_system.zones.joins(:settings).where('settings.name = ?', name.to_s).first.settings.where("name = ?", name.to_s).first || config.dependency.settings.where("name = ?", name.to_s).first
+			val = config.settings.where("name = ?", name.to_s).first
+			if val.nil?
+				val = config.control_system.zones.joins(:settings).where('settings.name = ?', name.to_s).first
+				val = val.settings.where("name = ?", name.to_s).first unless val.nil?
+				
+				val = config.dependency.settings.where("name = ?", name.to_s).first if val.nil?
+			end
 			
-			if !val.nil?
+			if val.present?
 				case val.value_type
 					when 0
 						return val.text_value
