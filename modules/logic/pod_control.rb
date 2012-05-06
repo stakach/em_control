@@ -198,6 +198,7 @@ class PodControl < Control::Logic
 		self[:help3] = setting('help3')
 		self[:name] = system.controller.name
 		self[:laptop1_text] = setting(:laptop1_text)
+		self[:laptop2_text] = setting(:laptop2_text)
 	end
 
 
