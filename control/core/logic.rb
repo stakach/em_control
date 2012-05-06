@@ -1,5 +1,3 @@
-
-
 module Control
 
 	#
@@ -37,9 +35,15 @@ module Control
 		
 
 		def setting(name)
-			val = LogicModule.lookup(self).settings.where("name = ?", name).first || LogicModule.lookup(self).control_system.zones.first.settings.where("name = ?", name.to_s).first || LogicModule.lookup(self).dependency.settings.where("name = ?", name).first
+			val = LogicModule.lookup(self).settings.where("name = ?", name).first
+			if val.nil?
+				val = LogicModule.lookup(self).control_system.zones.joins(:settings).where('settings.name = ?', name.to_s).first
+				val = val.settings.where("name = ?", name.to_s).first unless val.nil?
+				
+				val = LogicModule.lookup(self).dependency.settings.where("name = ?", name).first if val.nil?
+			end
 			
-			if !val.nil?
+			if val.present?
 				case val.value_type
 					when 0
 						return val.text_value
